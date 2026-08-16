@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #e53e3e;
+  --color-primary-dark: #c53030;
+  --color-dark: #1a1a1a;
+  --color-darker: #111111;
+  --color-gray-light: #f7f7f7;
+  --font-heading: "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-6 py-3 rounded font-semibold hover:bg-primary-dark transition-colors duration-200;
+  }
+}
