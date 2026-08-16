@@ -34,6 +34,40 @@ Les produits sont partagés via un contexte React et persistés dans le `localSt
 - [React 19](https://react.dev/)
 - [Tailwind CSS 4](https://tailwindcss.com/)
 - TypeScript
+- [Saleor](https://saleor.io/) — backend e-commerce headless (API GraphQL), optionnel
+
+## Intégration Saleor
+
+Le storefront peut consommer les produits depuis l'API GraphQL de [Saleor](https://github.com/saleor/saleor), une plateforme e-commerce headless. L'intégration est **non-destructive** : si Saleor n'est pas configuré ou injoignable, le projet revient automatiquement au catalogue statique intégré.
+
+### Configuration
+
+Copiez `.env.example` vers `.env.local` et ajustez :
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SALEOR_API_URL` | Endpoint GraphQL Saleor (ex: `https://votre-store.saleor.cloud/graphql/`) |
+| `NEXT_PUBLIC_SALEOR_CHANNEL` | Slug du canal Saleor (ex: `default-channel`) |
+| `NEXT_PUBLIC_USE_SALEOR` | `true` pour activer Saleor, `false` pour le catalogue statique |
+
+### Obtenir un backend Saleor
+
+- **Saleor Cloud** (recommandé) : créez une instance gratuite avec données de démo sur [cloud.saleor.io](https://cloud.saleor.io/)
+- **Auto-hébergé** : lancez Saleor via Docker (voir le [dépôt Saleor](https://github.com/saleor/saleor)), endpoint par défaut `http://localhost:8000/graphql/`
+- **Test rapide** : l'endpoint public de staging `https://master.staging.saleor.cloud/graphql/` est configuré par défaut
+
+### Comment ça marche
+
+- `src/lib/saleor/` : client GraphQL (fetch), requêtes et service de mapping
+- Les produits Saleor sont mappés vers l'interface `Product` de l'app (prix, image, tailles, couleur dérivés des attributs/variantes Saleor)
+- `ProductContext` tente Saleor en premier, puis retombe sur le catalogue local
+- Le tableau de bord admin affiche la source active (SALEOR / STATIC)
+
+> Note : les mutations d'écriture (ajout/modification via l'admin) restent locales à la session. Écrire dans Saleor nécessite des jetons d'application avec permissions staff, hors périmètre de cette intégration de démonstration.
 
 ## Démarrage
 

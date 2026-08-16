@@ -67,7 +67,7 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
-  const { products } = useProducts();
+  const { products, source, loading, error } = useProducts();
   const recentOrders = orders.slice(0, 5);
 
   return (
@@ -76,6 +76,43 @@ export default function AdminDashboard() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
         <p className="text-sm text-gray-500 mt-1">Vue d&apos;ensemble de votre boutique</p>
+      </div>
+
+      {/* Data source status */}
+      <div
+        className={`flex items-center gap-3 rounded-xl border p-4 ${
+          source === "saleor"
+            ? "bg-green-50 border-green-200"
+            : "bg-gray-50 border-gray-200"
+        }`}
+      >
+        <span
+          className={`w-2.5 h-2.5 rounded-full ${
+            loading
+              ? "bg-yellow-400 animate-pulse"
+              : source === "saleor"
+              ? "bg-green-500"
+              : "bg-gray-400"
+          }`}
+        />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-900">
+            {loading
+              ? "Connexion à Saleor..."
+              : source === "saleor"
+              ? "Connecté à Saleor (API GraphQL)"
+              : "Catalogue local (données statiques)"}
+          </p>
+          {error && <p className="text-xs text-amber-700 mt-0.5">{error}</p>}
+          {source === "saleor" && !error && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Les produits proviennent de l&apos;API Saleor. Les modifications admin sont locales à la session.
+            </p>
+          )}
+        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white border">
+          {source === "saleor" ? "SALEOR" : "STATIC"}
+        </span>
       </div>
 
       {/* KPI Cards */}
