@@ -3,15 +3,18 @@ import TrustBadges from "@/components/TrustBadges";
 import NewArrivals from "@/components/NewArrivals";
 import CategoryBanners from "@/components/CategoryBanners";
 import BestSellers from "@/components/BestSellers";
+import { getProducts } from "@/lib/data/products";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const products = await getProducts();
+
   return (
     <>
       <HeroSection />
       <TrustBadges />
-      <NewArrivals />
+      <NewArrivals products={products} />
       <CategoryBanners />
-      <BestSellers />
+      <BestSellers products={products} />
     </>
   );
 }

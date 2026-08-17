@@ -1,12 +1,10 @@
-"use client";
-
 import Link from "next/link";
-import { useProducts } from "@/context/ProductContext";
+import { StoreProduct } from "@/lib/data/types";
 import ProductCard from "./ProductCard";
 
-export default function BestSellers() {
-  const { products } = useProducts();
+export default function BestSellers({ products }: { products: StoreProduct[] }) {
   const bestSellers = products.filter((p) => p.isBestSeller).slice(0, 6);
+  if (bestSellers.length === 0) return null;
 
   return (
     <section className="py-12 bg-white">

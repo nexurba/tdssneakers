@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Product } from "@/data/products";
+import Link from "next/link";
+import { StoreProduct } from "@/lib/data/types";
 import { useCart } from "@/context/CartContext";
 
 interface ProductCardProps {
-  product: Product;
+  product: StoreProduct;
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
@@ -19,7 +20,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Image */}
-      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+      <Link href={`/produit/${product.slug}`} className="block relative aspect-square bg-gray-100 overflow-hidden">
         <img
           src={product.image}
           alt={`${product.name} - ${product.variant}`}
@@ -28,10 +29,17 @@ export default function ProductCard({ product }: ProductCardProps) {
           }`}
           loading="lazy"
         />
+        {product.isNew && (
+          <span className="absolute top-2 left-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded">
+            NEW
+          </span>
+        )}
+      </Link>
 
-        {/* Quick add button on hover */}
+      {/* Quick add */}
+      <div className="relative">
         <div
-          className={`absolute bottom-3 right-3 transition-all duration-200 ${
+          className={`absolute -top-14 right-3 transition-all duration-200 ${
             isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
           }`}
         >
@@ -45,18 +53,15 @@ export default function ProductCard({ product }: ProductCardProps) {
             </svg>
           </button>
         </div>
-
-        {/* New badge */}
-        {product.isNew && (
-          <span className="absolute top-2 left-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded">
-            NEW
-          </span>
-        )}
       </div>
 
       {/* Info */}
       <div className="p-4">
-        <h3 className="text-sm font-bold text-gray-900 truncate">{product.name}</h3>
+        <Link href={`/produit/${product.slug}`}>
+          <h3 className="text-sm font-bold text-gray-900 truncate hover:text-primary transition-colors">
+            {product.name}
+          </h3>
+        </Link>
         <p className="text-xs text-gray-500 mb-1">{product.variant}</p>
         <div className="flex items-center justify-between">
           <p className="text-sm font-bold">{product.price},00 $ CAD</p>
@@ -70,7 +75,6 @@ export default function ProductCard({ product }: ProductCardProps) {
             </svg>
           </button>
         </div>
-        {/* Sizes */}
         <div className="flex gap-1 mt-2 flex-wrap">
           {product.sizes.map((size) => (
             <span

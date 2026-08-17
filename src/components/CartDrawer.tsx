@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 
 export default function CartDrawer() {
@@ -48,14 +49,14 @@ export default function CartDrawer() {
           ) : (
             items.map((item) => (
               <div
-                key={`${item.product.id}-${item.size}`}
+                key={`${item.productId}-${item.size}`}
                 className="flex gap-4 bg-gray-50 rounded-lg p-3"
               >
                 {/* Product image */}
                 <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
                   <img
-                    src={item.product.image}
-                    alt={item.product.name}
+                    src={item.image}
+                    alt={item.name}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -63,20 +64,18 @@ export default function CartDrawer() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-bold text-gray-900 truncate">
-                    {item.product.name}
+                    {item.name}
                   </h4>
                   <p className="text-xs text-gray-500">
-                    {item.product.variant} · Taille: {item.size}
+                    {item.variant} · Taille: {item.size}
                   </p>
-                  <p className="text-sm font-bold mt-1">
-                    {item.product.price},00 $ CAD
-                  </p>
+                  <p className="text-sm font-bold mt-1">{item.price},00 $ CAD</p>
 
                   {/* Quantity controls */}
                   <div className="flex items-center gap-2 mt-2">
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.size, item.quantity - 1)
+                        updateQuantity(item.productId, item.size, item.quantity - 1)
                       }
                       className="w-6 h-6 flex items-center justify-center border rounded text-xs hover:bg-gray-100"
                     >
@@ -87,7 +86,7 @@ export default function CartDrawer() {
                     </span>
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.size, item.quantity + 1)
+                        updateQuantity(item.productId, item.size, item.quantity + 1)
                       }
                       className="w-6 h-6 flex items-center justify-center border rounded text-xs hover:bg-gray-100"
                     >
@@ -98,7 +97,7 @@ export default function CartDrawer() {
 
                 {/* Remove */}
                 <button
-                  onClick={() => removeFromCart(item.product.id, item.size)}
+                  onClick={() => removeFromCart(item.productId, item.size)}
                   className="text-gray-400 hover:text-red-500 transition-colors self-start"
                   aria-label="Supprimer"
                 >
@@ -118,9 +117,13 @@ export default function CartDrawer() {
               <span className="font-bold">Total</span>
               <span className="font-bold text-lg">{totalPrice},00 $ CAD</span>
             </div>
-            <button className="w-full bg-black text-white py-3 rounded font-bold text-sm hover:bg-gray-800 transition-colors">
+            <Link
+              href="/checkout"
+              onClick={closeCart}
+              className="block w-full bg-black text-white py-3 rounded font-bold text-sm hover:bg-gray-800 transition-colors text-center"
+            >
               PASSER LA COMMANDE
-            </button>
+            </Link>
             <button
               onClick={closeCart}
               className="w-full text-center text-sm text-gray-500 hover:text-gray-700 transition-colors"

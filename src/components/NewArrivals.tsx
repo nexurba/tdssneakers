@@ -1,12 +1,10 @@
-"use client";
-
 import Link from "next/link";
-import { useProducts } from "@/context/ProductContext";
+import { StoreProduct } from "@/lib/data/types";
 import ProductCard from "./ProductCard";
 
-export default function NewArrivals() {
-  const { products } = useProducts();
+export default function NewArrivals({ products }: { products: StoreProduct[] }) {
   const newProducts = products.filter((p) => p.isNew).slice(0, 4);
+  if (newProducts.length === 0) return null;
 
   return (
     <section className="py-12 bg-gray-light">

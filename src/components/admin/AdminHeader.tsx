@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOutAction } from "@/app/(admin)/admin/auth-actions";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
@@ -14,7 +15,14 @@ const navItems = [
 
 export default function AdminHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const pathname = usePathname();
+
+  function handleSignOut() {
+    startTransition(async () => {
+      await signOutAction();
+    });
+  }
 
   return (
     <header className="bg-white border-b sticky top-0 z-40">
@@ -61,6 +69,19 @@ export default function AdminHeader() {
             </div>
             <span className="hidden md:block text-sm font-medium">Admin</span>
           </div>
+
+          {/* Sign out */}
+          <button
+            onClick={handleSignOut}
+            disabled={isPending}
+            className="p-2 text-gray-500 hover:text-red-600 transition-colors disabled:opacity-50"
+            aria-label="Se déconnecter"
+            title="Se déconnecter"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
         </div>
       </div>
 
