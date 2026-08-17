@@ -7,14 +7,13 @@ import { signInAction } from "./auth-actions";
 export default function AdminLogin() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   function submit() {
     setError("");
     startTransition(async () => {
-      const res = await signInAction(email, password);
+      const res = await signInAction(password);
       if (res.ok) {
         router.refresh();
       } else {
@@ -37,18 +36,6 @@ export default function AdminLogin() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submit()}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="admin@tdssneakers.ca"
-                autoFocus
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
               <input
                 type="password"
@@ -57,6 +44,7 @@ export default function AdminLogin() {
                 onKeyDown={(e) => e.key === "Enter" && submit()}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="••••••••"
+                autoFocus
               />
             </div>
             {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
@@ -71,7 +59,7 @@ export default function AdminLogin() {
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
-            Authentification sécurisée via Supabase
+            Accès réservé à l&apos;administrateur
           </p>
         </div>
       </div>

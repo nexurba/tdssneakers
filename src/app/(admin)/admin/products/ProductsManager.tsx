@@ -7,7 +7,6 @@ import {
   createProductAction,
   updateProductAction,
   deleteProductAction,
-  uploadImageAction,
 } from "./actions";
 
 interface FormState {
@@ -142,24 +141,7 @@ export default function ProductsManager({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const [uploading, setUploading] = useState(false);
 
-  function handleUpload(file: File | undefined) {
-    if (!file) return;
-    setUploading(true);
-    const fd = new FormData();
-    fd.set("file", file);
-    startTransition(async () => {
-      const res = await uploadImageAction(fd);
-      setUploading(false);
-      if (res.ok && res.url) {
-        setField("image", res.url);
-        notify("success", "Image téléversée");
-      } else {
-        notify("error", res.error ?? "Échec du téléversement");
-      }
-    });
-  }
 
   return (
     <div className="space-y-6">
@@ -336,26 +318,11 @@ export default function ProductsManager({
               <Field label="Description">
                 <textarea value={form.description} onChange={(e) => setField("description", e.target.value)} className={inputCls} rows={2} placeholder="Description du produit..." />
               </Field>
-              <Field label="Image">
-                <input type="url" value={form.image} onChange={(e) => setField("image", e.target.value)} className={inputCls} placeholder="https://... ou téléverser ci-dessous" />
-                <div className="flex items-center gap-3 mt-2">
-                  <label className="inline-flex items-center gap-2 px-3 py-2 border rounded-lg text-xs font-medium cursor-pointer hover:bg-gray-50">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    {uploading ? "Téléversement..." : "Téléverser"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handleUpload(e.target.files?.[0])}
-                      disabled={uploading}
-                    />
-                  </label>
-                  {form.image && (
-                    <img src={form.image} alt="Aperçu" className="w-16 h-16 object-cover rounded-lg bg-gray-100" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-                  )}
-                </div>
+              <Field label="Image (URL)">
+                <input type="url" value={form.image} onChange={(e) => setField("image", e.target.value)} className={inputCls} placeholder="https://images.unsplash.com/..." />
+                {form.image && (
+                  <img src={form.image} alt="Aperçu" className="mt-2 w-16 h-16 object-cover rounded-lg bg-gray-100" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                )}
               </Field>
               <div className="flex gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">

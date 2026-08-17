@@ -8,7 +8,6 @@ import {
   deleteProduct,
   type ProductInput,
 } from "@/lib/data/products-admin";
-import { uploadProductImage } from "@/lib/supabase/storage";
 import { isDbConfigured } from "@/db";
 
 const productSchema = z.object({
@@ -112,16 +111,4 @@ export async function deleteProductAction(id: number): Promise<ActionResult> {
   }
 }
 
-export async function uploadImageAction(
-  formData: FormData
-): Promise<{ ok: boolean; url?: string; error?: string }> {
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Aucun fichier fourni." };
-  }
-  const result = await uploadProductImage(file);
-  if ("error" in result) {
-    return { ok: false, error: result.error };
-  }
-  return { ok: true, url: result.url };
-}
+

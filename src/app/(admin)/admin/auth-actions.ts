@@ -1,38 +1,22 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured, isAdminEmail } from "@/lib/supabase/config";
+import { checkPassword, createSession, destroySession } from "@/lib/auth/admin";
 
 export interface AuthResult {
   ok: boolean;
   error?: string;
 }
 
-export async function signInAction(
-  email: string,
-  password: string
-): Promise<AuthResult> {
-  if (!isSupabaseConfigured()) {
-    return { ok: false, error: "Supabase non configuré." };
+export async function signInAction(password: string): Promise<AuthResult> {
+  if (!checkPassword(password)) {
+    return { ok: false, error: "Mot de passe incorrect." };
   }
-  if (!isAdminEmail(email)) {
-    return { ok: false, error: "Cet email n'est pas autorisé à accéder à l'admin." };
-  }
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { ok: false, error: "Supabase non configuré." };
-
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    return { ok: false, error: "Identifiants invalides." };
-  }
+  await createSession();
   return { ok: true };
 }
 
 export async function signOutAction(): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  if (supabase) {
-    await supabase.auth.signOut();
-  }
+  await destroySession();
   redirect("/admin");
 }

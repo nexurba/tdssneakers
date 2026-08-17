@@ -58,7 +58,7 @@ export default async function AdminDashboard() {
         <span className={`w-2.5 h-2.5 rounded-full ${isDbConfigured ? "bg-green-500" : "bg-amber-400"}`} />
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-900">
-            {isDbConfigured ? "Base de données connectée (Supabase/Postgres)" : "Mode démo — catalogue statique"}
+            {isDbConfigured ? "Base de données connectée (Postgres)" : "Mode démo — catalogue statique"}
           </p>
           {!isDbConfigured && (
             <p className="text-xs text-amber-700 mt-0.5">
