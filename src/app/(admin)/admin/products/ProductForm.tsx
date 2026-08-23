@@ -79,6 +79,11 @@ export default function ProductForm({
 
   const [uploadMsg, setUploadMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+    current: string;
+  } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [customColorOpen, setCustomColorOpen] = useState(false);
   const [customColorName, setCustomColorName] = useState("");
@@ -156,18 +161,27 @@ export default function ProductForm({
 
     setUploading(true);
     setUploadMsg(null);
+    setProgress({ done: 0, total: accepted.length, current: accepted[0].name });
 
     startTransition(async () => {
       const uploaded: string[] = [];
       const errors: string[] = [...rejected];
 
-      // One request per file keeps each payload well under the body limit.
-      for (const file of accepted) {
+      // One request per file keeps each payload well under the body limit
+      // and lets us report progress as each one lands.
+      for (let i = 0; i < accepted.length; i++) {
+        const file = accepted[i];
+        setProgress({ done: i, total: accepted.length, current: file.name });
+
         const fd = new FormData();
         fd.append("files", file);
         try {
           const res = await uploadImagesAction(fd);
-          if (res.urls.length > 0) uploaded.push(...res.urls);
+          if (res.urls.length > 0) {
+            uploaded.push(...res.urls);
+            // Show each image as soon as it is stored.
+            onChange({ ...value, images: [...value.images, ...uploaded] });
+          }
           if (res.error) errors.push(res.error);
         } catch (err) {
           // A thrown Server Action (e.g. 413) must not crash the client.
@@ -178,15 +192,15 @@ export default function ProductForm({
               : `${file.name}: ${msg}`
           );
         }
+        setProgress({ done: i + 1, total: accepted.length, current: file.name });
       }
 
       setUploading(false);
-      if (uploaded.length > 0) {
-        onChange({ ...value, images: [...value.images, ...uploaded] });
-      }
+      setProgress(null);
+
       if (errors.length > 0) {
         setUploadMsg({
-          type: uploaded.length > 0 ? "err" : "err",
+          type: "err",
           text:
             (uploaded.length > 0 ? `${uploaded.length} image(s) ajoutée(s). ` : "") +
             errors.join(" · "),
@@ -644,17 +658,22 @@ export default function ProductForm({
         <label className="block text-sm font-medium text-gray-700 mb-2">Images</label>
 
         <div
-          onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+          onDragEnter={(e) => { if (!uploading) { e.preventDefault(); setDragActive(true); } }}
+          onDragOver={(e) => { if (!uploading) { e.preventDefault(); setDragActive(true); } }}
           onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
           onDrop={(e) => {
             e.preventDefault();
             setDragActive(false);
-            handleFiles(e.dataTransfer.files);
+            if (!uploading) handleFiles(e.dataTransfer.files);
           }}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-            dragActive ? "border-primary bg-red-50" : "border-gray-300 hover:border-gray-400 bg-gray-50"
+          onClick={() => { if (!uploading) fileInputRef.current?.click(); }}
+          aria-busy={uploading}
+          className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+            uploading
+              ? "border-gray-300 bg-gray-50 cursor-wait"
+              : dragActive
+              ? "border-primary bg-red-50 cursor-pointer"
+              : "border-gray-300 hover:border-gray-400 bg-gray-50 cursor-pointer"
           }`}
         >
           <input
@@ -662,18 +681,61 @@ export default function ProductForm({
             type="file"
             accept="image/*"
             multiple
+            disabled={uploading}
             className="hidden"
             onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
           />
-          <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          <p className="text-sm font-medium text-gray-700">
-            {uploading ? "Téléversement en cours…" : "Glissez-déposez vos images ici"}
-          </p>
-          <p className="text-[11px] text-gray-500 mt-0.5">
-            ou cliquez pour parcourir · JPG, PNG, WebP, AVIF · max 8 Mo
-          </p>
+
+          {uploading ? (
+            <>
+              {/* Spinner */}
+              <svg
+                className="w-8 h-8 mx-auto mb-2 animate-spin text-primary"
+                viewBox="0 0 24 24"
+                fill="none"
+                role="status"
+                aria-label="Téléversement en cours"
+              >
+                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path
+                  d="M22 12a10 10 0 0 0-10-10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <p className="text-sm font-medium text-gray-700">
+                Téléversement{progress ? ` ${progress.done + (progress.done < progress.total ? 1 : 0)}/${progress.total}` : ""}…
+              </p>
+              {progress && (
+                <>
+                  <p className="text-[11px] text-gray-500 mt-0.5 truncate max-w-full px-4">
+                    {progress.current}
+                  </p>
+                  {progress.total > 1 && (
+                    <div className="mt-2 mx-auto max-w-[16rem] h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-300"
+                        style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p className="text-sm font-medium text-gray-700">
+                Glissez-déposez vos images ici
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                ou cliquez pour parcourir · JPG, PNG, WebP, AVIF · max 8 Mo
+              </p>
+            </>
+          )}
         </div>
 
         {uploadMsg && (
