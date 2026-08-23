@@ -14,6 +14,10 @@ import {
   type ProductCategory,
   type ProductGender,
 } from "@/lib/catalog/taxonomy";
+import {
+  toSizePair,
+  type SizeScale,
+} from "@/lib/catalog/size-conversion";
 import { uploadImagesAction, lookupProductAction } from "./actions";
 
 export interface ProductFormState {
@@ -24,6 +28,8 @@ export interface ProductFormState {
   price: string;
   category: ProductCategory;
   gender: ProductGender | "";
+  /** For unisex: which scale the admin is entering sizes in. */
+  sizeScale: SizeScale;
   color: string;
   colorHex: string;
   images: string[];
@@ -43,6 +49,7 @@ export const emptyProductForm: ProductFormState = {
   category: "sneakers",
   // Default so the size chart is visible immediately for shoes/clothing.
   gender: "homme",
+  sizeScale: "men",
   color: "",
   colorHex: "",
   images: [],
@@ -79,10 +86,18 @@ export default function ProductForm({
 
   const needsGender = requiresGender(value.category);
   const needsSizes = requiresSizes(value.category);
+  const isUnisex = value.gender === "unisex";
+
+  // For unisex, show the chart matching the scale the admin is typing in.
+  const chartGender: ProductGender | null = isUnisex
+    ? value.sizeScale === "women"
+      ? "femme"
+      : "homme"
+    : ((value.gender || null) as ProductGender | null);
 
   const sizeOptions = useMemo(
-    () => getSizeOptions(value.category, (value.gender || null) as ProductGender | null),
-    [value.category, value.gender]
+    () => getSizeOptions(value.category, chartGender),
+    [value.category, chartGender]
   );
 
   // Custom sizes are the selected ones absent from the predefined chart.
@@ -489,6 +504,46 @@ export default function ProductForm({
             )}
           </div>
 
+          {/* Unisex: choose the input scale; conversion is automatic. */}
+          {isUnisex && (
+            <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs font-medium text-blue-900 mb-2">
+                Produit unisexe — saisissez les tailles dans l&apos;échelle de votre choix.
+                La conversion est automatique et le produit sera visible côté Homme et Femme.
+              </p>
+              <div className="flex gap-2">
+                {([
+                  { v: "men" as SizeScale, label: "Échelle Homme" },
+                  { v: "women" as SizeScale, label: "Échelle Femme" },
+                ]).map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => set("sizeScale", opt.v)}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                      value.sizeScale === opt.v
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-blue-800 border-blue-300 hover:border-blue-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {value.sizes.length > 0 && (
+                <p className="text-[11px] text-blue-800 mt-2">
+                  Équivalences :{" "}
+                  {value.sizes
+                    .map((s) => {
+                      const pair = toSizePair(value.category, value.sizeScale, s);
+                      return pair ? `${pair.men}H↔${pair.women}F` : `${s} (tel quel)`;
+                    })
+                    .join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {!value.gender ? (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
               Sélectionnez d&apos;abord un genre pour afficher les tailles disponibles.
@@ -549,29 +604,50 @@ export default function ProductForm({
               {/* Stock per selected size */}
               {value.sizes.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Stock par taille</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-gray-700">Quantité par taille</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          ...value,
+                          stockBySize: Object.fromEntries(value.sizes.map((s) => [s, "1"])),
+                        })
+                      }
+                      className="text-[11px] font-medium text-primary hover:underline"
+                    >
+                      Tout mettre à 1
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {value.sizes.map((s) => (
-                      <div key={s} className="flex items-center gap-1.5 border rounded-lg px-2 py-1">
-                        <span className="text-xs font-medium text-gray-600 min-w-[2rem]">{s}</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={value.stockBySize[s] ?? ""}
-                          onChange={(e) =>
-                            onChange({
-                              ...value,
-                              stockBySize: { ...value.stockBySize, [s]: e.target.value },
-                            })
-                          }
-                          placeholder="25"
-                          className="w-16 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                        />
-                      </div>
-                    ))}
+                    {value.sizes.map((s) => {
+                      const pair = isUnisex
+                        ? toSizePair(value.category, value.sizeScale, s)
+                        : null;
+                      return (
+                        <div key={s} className="flex items-center gap-1.5 border rounded-lg px-2 py-1">
+                          <span className="text-xs font-medium text-gray-600 min-w-[2rem]">
+                            {pair ? `${pair.men}H/${pair.women}F` : s}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={value.stockBySize[s] ?? ""}
+                            onChange={(e) =>
+                              onChange({
+                                ...value,
+                                stockBySize: { ...value.stockBySize, [s]: e.target.value },
+                              })
+                            }
+                            placeholder="1"
+                            className="w-16 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                   <p className="text-[11px] text-gray-400 mt-1">
-                    Laissez vide pour conserver le stock actuel {mode === "add" ? "(25 par défaut)" : ""}.
+                    Quantité par défaut : 1. {mode === "edit" ? "Laissez vide pour conserver la quantité actuelle." : ""}
                   </p>
                 </div>
               )}

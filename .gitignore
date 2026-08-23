@@ -37,3 +37,6 @@ next-env.d.ts
 
 # Kiro MCP config (contient des tokens — ne pas committer)
 .kiro/settings/mcp.json
+
+# local test scripts
+/scripts

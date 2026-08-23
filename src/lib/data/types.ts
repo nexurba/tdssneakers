@@ -10,7 +10,9 @@ export interface StoreProduct extends Product {
   images?: string[];
   stockBySize?: Record<string, number>;
   isActive?: boolean;
-  gender?: "homme" | "femme" | "enfant" | null;
+  gender?: "homme" | "femme" | "enfant" | "unisex" | null;
+  /** Scale the sizes were entered in (unisex products only). */
+  sizeScale?: "men" | "women" | null;
   brand?: string | null;
   productCode?: string | null;
   colorHex?: string | null;

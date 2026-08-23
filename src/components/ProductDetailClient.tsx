@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { StoreProduct } from "@/lib/data/types";
+import { toSizePair } from "@/lib/catalog/size-conversion";
 import { useCart } from "@/context/CartContext";
 
 export default function ProductDetailClient({ product }: { product: StoreProduct }) {
@@ -32,6 +33,12 @@ export default function ProductDetailClient({ product }: { product: StoreProduct
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [goPrev, goNext, images.length]);
+
+  const isUnisex = product.gender === "unisex";
+  // Shoppers can flip a unisex product between the men's and women's scale.
+  const [scale, setScale] = useState<"men" | "women">(
+    product.sizeScale === "women" ? "women" : "men"
+  );
 
   const stockForSize = selectedSize ? product.stockBySize?.[selectedSize] ?? 0 : 0;
   const outOfStock = selectedSize !== null && stockForSize <= 0;
@@ -131,11 +138,40 @@ export default function ProductDetailClient({ product }: { product: StoreProduct
 
         {/* Size selector */}
         <div className="mt-6">
-          <p className="text-sm font-semibold mb-2">Taille</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold">Taille</p>
+            {isUnisex && (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-500 mr-1">Échelle :</span>
+                {(["men", "women"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setScale(s)}
+                    className={`px-2 py-1 rounded-md border font-medium transition-colors ${
+                      scale === s
+                        ? "bg-black text-white border-black"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-black"
+                    }`}
+                  >
+                    {s === "men" ? "Homme" : "Femme"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {isUnisex && (
+            <p className="text-xs text-gray-500 mb-2">
+              Modèle unisexe — tailles affichées en échelle {scale === "men" ? "Homme" : "Femme"}.
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             {product.sizes.map((size) => {
               const stock = product.stockBySize?.[size] ?? 0;
               const disabled = stock <= 0;
+              // For unisex, `size` is the canonical men's value; show the
+              // equivalent on the scale the shopper selected.
+              const pair = isUnisex ? toSizePair(product.category, "men", size) : null;
+              const label = pair ? (scale === "women" ? pair.women : pair.men) : size;
               return (
                 <button
                   key={size}
@@ -149,7 +185,7 @@ export default function ProductDetailClient({ product }: { product: StoreProduct
                       : "bg-white text-gray-700 border-gray-300 hover:border-black"
                   }`}
                 >
-                  {size}
+                  {label}
                 </button>
               );
             })}

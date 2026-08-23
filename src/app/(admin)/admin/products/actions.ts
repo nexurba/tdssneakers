@@ -12,6 +12,11 @@ import { isDbConfigured } from "@/db";
 import { uploadProductImage, isBlobConfigured } from "@/lib/storage/blob";
 import { lookupProductByCode, type LookupResult } from "@/lib/catalog/lookup";
 import { requiresGender, requiresSizes } from "@/lib/catalog/taxonomy";
+import {
+  toCanonicalSizes,
+  toSizePair,
+  type SizeScale,
+} from "@/lib/catalog/size-conversion";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1556906781-9a412961c28c?w=800&h=800&fit=crop";
@@ -21,7 +26,8 @@ const productSchema = z.object({
   variant: z.string().optional(),
   price: z.coerce.number().min(0, "Prix invalide"),
   category: z.enum(["sneakers", "vetements", "accessoires"]),
-  gender: z.enum(["homme", "femme", "enfant"]).nullable().optional(),
+  gender: z.enum(["homme", "femme", "enfant", "unisex"]).nullable().optional(),
+  sizeScale: z.enum(["men", "women"]).optional(),
   brand: z.string().optional(),
   productCode: z.string().min(1, "Code produit requis"),
   color: z.string().min(1, "Couleur requise"),
@@ -71,6 +77,7 @@ function parseInput(formData: FormData): ProductInput {
     price: str(formData, "price"),
     category: str(formData, "category"),
     gender: genderRaw === "" ? null : genderRaw,
+    sizeScale: str(formData, "sizeScale") || undefined,
     brand: str(formData, "brand") || undefined,
     productCode: str(formData, "productCode"),
     color: str(formData, "color"),
@@ -89,10 +96,31 @@ function parseInput(formData: FormData): ProductInput {
     .filter(Boolean);
   const image = imageList[0] || FALLBACK_IMAGE;
 
-  const sizeList = (parsed.sizes ?? "")
+  const rawSizes = (parsed.sizes ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  const isUnisex = parsed.gender === "unisex";
+  const scale: SizeScale = parsed.sizeScale ?? "men";
+
+  // Unisex sizes are stored on the canonical men's scale so one product can
+  // be displayed on both scales; women's-scale input is converted here.
+  const sizeList = isUnisex
+    ? toCanonicalSizes(parsed.category, scale, rawSizes)
+    : rawSizes;
+
+  // Re-key the quantity map onto the canonical sizes.
+  const rawStock = parseStock(formData.get("stockBySize"));
+  const stockBySize =
+    isUnisex && rawStock
+      ? Object.fromEntries(
+          Object.entries(rawStock).map(([size, qty]) => {
+            const pair = toSizePair(parsed.category, scale, size);
+            return [pair ? pair.men : size, qty];
+          })
+        )
+      : rawStock;
 
   // Enforce taxonomy rules server-side: accessories carry no gender/sizes.
   const needsGender = requiresGender(parsed.category);
@@ -112,6 +140,7 @@ function parseInput(formData: FormData): ProductInput {
     price: parsed.price,
     category: parsed.category,
     gender: needsGender ? parsed.gender ?? null : null,
+    sizeScale: needsSizes && isUnisex ? scale : null,
     brand: parsed.brand ?? null,
     productCode: parsed.productCode ?? null,
     color: parsed.color,
@@ -120,7 +149,7 @@ function parseInput(formData: FormData): ProductInput {
     images: imageList.length > 0 ? imageList : [image],
     description: parsed.description ?? null,
     sizes: needsSizes ? sizeList : [],
-    stockBySize: needsSizes ? parseStock(formData.get("stockBySize")) : undefined,
+    stockBySize: needsSizes ? stockBySize : undefined,
     isNew: parsed.isNew,
     isBestSeller: parsed.isBestSeller,
     isActive: true,

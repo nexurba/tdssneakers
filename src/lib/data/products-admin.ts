@@ -9,7 +9,8 @@ export interface ProductInput {
   variant: string;
   price: number;
   category: "sneakers" | "vetements" | "accessoires";
-  gender?: "homme" | "femme" | "enfant" | null;
+  gender?: "homme" | "femme" | "enfant" | "unisex" | null;
+  sizeScale?: "men" | "women" | null;
   brand?: string | null;
   productCode?: string | null;
   color: string;
@@ -43,6 +44,7 @@ export async function createProduct(input: ProductInput): Promise<number> {
       price: String(input.price),
       category: input.category,
       gender: input.gender ?? null,
+      sizeScale: input.sizeScale ?? null,
       brand: input.brand ?? null,
       productCode: input.productCode ?? null,
       color: input.color,
@@ -61,7 +63,7 @@ export async function createProduct(input: ProductInput): Promise<number> {
       input.sizes.map((size) => ({
         productId: row.id,
         size,
-        stock: input.stockBySize?.[size] ?? 25,
+        stock: input.stockBySize?.[size] ?? 1,
       }))
     );
   }
@@ -81,6 +83,7 @@ export async function updateProduct(
       price: String(input.price),
       category: input.category,
       gender: input.gender ?? null,
+      sizeScale: input.sizeScale ?? null,
       brand: input.brand ?? null,
       productCode: input.productCode ?? null,
       color: input.color,
@@ -116,7 +119,7 @@ export async function updateProduct(
       toAdd.map((size) => ({
         productId: id,
         size,
-        stock: input.stockBySize?.[size] ?? 25,
+        stock: input.stockBySize?.[size] ?? 1,
       }))
     );
   }

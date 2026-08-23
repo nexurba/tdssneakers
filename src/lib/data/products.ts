@@ -41,6 +41,7 @@ function rowToStore(row: ProductRow, variants: ProductVariantRow[]): StoreProduc
     color: row.color,
     colorHex: row.colorHex,
     gender: row.gender,
+    sizeScale: row.sizeScale,
     brand: row.brand,
     productCode: row.productCode,
     isNew: row.isNew ?? false,

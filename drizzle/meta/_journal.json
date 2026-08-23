@@ -15,6 +15,13 @@
       "when": 1787518680462,
       "tag": "0001_low_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787521116666,
+      "tag": "0002_familiar_whistler",
+      "breakpoints": true
     }
   ]
 }

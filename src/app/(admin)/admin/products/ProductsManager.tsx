@@ -38,6 +38,7 @@ function productToForm(p: StoreProduct): ProductFormState {
     price: String(p.price),
     category: p.category as ProductCategory,
     gender: (p.gender ?? "") as ProductGender | "",
+    sizeScale: (p.sizeScale ?? "men") as "men" | "women",
     color: p.color,
     colorHex: p.colorHex ?? findColor(p.color)?.hex ?? "",
     images: p.images && p.images.length > 0 ? p.images : [p.image],
@@ -60,6 +61,7 @@ function formToFormData(form: ProductFormState): FormData {
   fd.set("price", form.price);
   fd.set("category", form.category);
   fd.set("gender", form.gender);
+  fd.set("sizeScale", form.sizeScale);
   fd.set("color", form.color);
   fd.set("colorHex", form.colorHex);
   fd.set("images", form.images.join("\n"));

@@ -25,8 +25,15 @@ export const productGenderEnum = pgEnum("product_gender", [
   "homme",
   "femme",
   "enfant",
-  "unisex"
+  "unisex",
 ]);
+
+/**
+ * Which scale a unisex product's sizes were entered in. Sizes are always
+ * STORED on the men's scale (industry convention); this records the admin's
+ * input scale so the form can round-trip faithfully.
+ */
+export const sizeScaleEnum = pgEnum("size_scale", ["men", "women"]);
 
 export const orderStatusEnum = pgEnum("order_status", [
   "pending",
@@ -61,6 +68,8 @@ export const products = pgTable(
     category: productCategoryEnum("category").notNull().default("sneakers"),
     // Null for accessories (no gender).
     gender: productGenderEnum("gender"),
+    // Only meaningful when gender = 'unisex'.
+    sizeScale: sizeScaleEnum("size_scale"),
     brand: text("brand"),
     productCode: text("product_code"),
     color: text("color").notNull().default(""),
@@ -90,7 +99,8 @@ export const productVariants = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     size: text("size").notNull(),
-    stock: integer("stock").notNull().default(0),
+    /** Quantity on hand for this size. Defaults to 1. */
+    stock: integer("stock").notNull().default(1),
     sku: text("sku"),
   },
   (t) => ({

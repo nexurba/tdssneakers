@@ -4,7 +4,7 @@
  */
 
 export type ProductCategory = "sneakers" | "vetements" | "accessoires";
-export type ProductGender = "homme" | "femme" | "enfant";
+export type ProductGender = "homme" | "femme" | "enfant" | "unisex";
 
 export const CATEGORIES: {
   value: ProductCategory;
@@ -22,6 +22,7 @@ export const GENDERS: { value: ProductGender; label: string }[] = [
   { value: "homme", label: "Homme" },
   { value: "femme", label: "Femme" },
   { value: "enfant", label: "Enfant" },
+  { value: "unisex", label: "Unisexe" },
 ];
 
 export function categoryConfig(category: ProductCategory) {
@@ -43,6 +44,8 @@ const SHOE_SIZES: Record<ProductGender, string[]> = {
   homme: ["6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "10.5", "11", "11.5", "12", "13", "14"],
   femme: ["5", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "11"],
   enfant: ["10C", "11C", "12C", "13C", "1Y", "2Y", "3Y", "4Y", "5Y", "6Y", "7Y"],
+  // Unisex shoes span the combined adult range (US men's scale is the norm).
+  unisex: ["4", "4.5", "5", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "10.5", "11", "11.5", "12", "13", "14"],
 };
 
 /** Apparel sizing, per gender. */
@@ -50,6 +53,7 @@ const CLOTHING_SIZES: Record<ProductGender, string[]> = {
   homme: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
   femme: ["XS", "S", "M", "L", "XL", "XXL"],
   enfant: ["2T", "3T", "4T", "5-6A", "7-8A", "10-12A", "14-16A"],
+  unisex: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
 };
 
 /**
@@ -70,9 +74,13 @@ export function sizeChartLabel(
 ): string {
   if (!requiresSizes(category) || !gender) return "";
   if (category === "sneakers") {
-    return gender === "enfant" ? "Pointures enfant (US)" : "Pointures US";
+    if (gender === "enfant") return "Pointures enfant (US)";
+    if (gender === "unisex") return "Pointures US (unisexe)";
+    return "Pointures US";
   }
-  return gender === "enfant" ? "Tailles enfant" : "Tailles standard";
+  if (gender === "enfant") return "Tailles enfant";
+  if (gender === "unisex") return "Tailles unisexe";
+  return "Tailles standard";
 }
 
 // ---- Colours ----------------------------------------------------------------
