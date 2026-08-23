@@ -6,7 +6,7 @@ export interface Product {
   image: string;
   images?: string[];
   sizes: string[];
-  category: "sneakers" | "vetements";
+  category: "sneakers" | "vetements" | "accessoires";
   color: string;
   isNew?: boolean;
   isBestSeller?: boolean;

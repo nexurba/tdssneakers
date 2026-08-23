@@ -18,6 +18,13 @@ import { relations } from "drizzle-orm";
 export const productCategoryEnum = pgEnum("product_category", [
   "sneakers",
   "vetements",
+  "accessoires",
+]);
+
+export const productGenderEnum = pgEnum("product_gender", [
+  "homme",
+  "femme",
+  "enfant",
 ]);
 
 export const orderStatusEnum = pgEnum("order_status", [
@@ -51,7 +58,12 @@ export const products = pgTable(
     description: text("description"),
     price: numeric("price", { precision: 10, scale: 2 }).notNull(),
     category: productCategoryEnum("category").notNull().default("sneakers"),
+    // Null for accessories (no gender).
+    gender: productGenderEnum("gender"),
+    brand: text("brand"),
+    productCode: text("product_code"),
     color: text("color").notNull().default(""),
+    colorHex: text("color_hex"),
     image: text("image").notNull(),
     images: jsonb("images").$type<string[]>().default([]),
     isNew: boolean("is_new").default(false),
@@ -63,6 +75,7 @@ export const products = pgTable(
   (t) => ({
     slugIdx: uniqueIndex("products_slug_idx").on(t.slug),
     categoryIdx: index("products_category_idx").on(t.category),
+    genderIdx: index("products_gender_idx").on(t.gender),
   })
 );
 

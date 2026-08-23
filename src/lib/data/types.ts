@@ -10,6 +10,10 @@ export interface StoreProduct extends Product {
   images?: string[];
   stockBySize?: Record<string, number>;
   isActive?: boolean;
+  gender?: "homme" | "femme" | "enfant" | null;
+  brand?: string | null;
+  productCode?: string | null;
+  colorHex?: string | null;
 }
 
 export interface OrderItemData {

@@ -8,8 +8,12 @@ export interface ProductInput {
   name: string;
   variant: string;
   price: number;
-  category: "sneakers" | "vetements";
+  category: "sneakers" | "vetements" | "accessoires";
+  gender?: "homme" | "femme" | "enfant" | null;
+  brand?: string | null;
+  productCode?: string | null;
   color: string;
+  colorHex?: string | null;
   image: string;
   images?: string[];
   description?: string | null;
@@ -38,7 +42,11 @@ export async function createProduct(input: ProductInput): Promise<number> {
       slug: slugify(input.name, input.variant, Date.now().toString(36)),
       price: String(input.price),
       category: input.category,
+      gender: input.gender ?? null,
+      brand: input.brand ?? null,
+      productCode: input.productCode ?? null,
       color: input.color,
+      colorHex: input.colorHex ?? null,
       image: input.image,
       images: input.images ?? [input.image],
       description: input.description ?? null,
@@ -72,7 +80,11 @@ export async function updateProduct(
       variant: input.variant,
       price: String(input.price),
       category: input.category,
+      gender: input.gender ?? null,
+      brand: input.brand ?? null,
+      productCode: input.productCode ?? null,
       color: input.color,
+      colorHex: input.colorHex ?? null,
       image: input.image,
       images: input.images ?? [input.image],
       description: input.description ?? null,
