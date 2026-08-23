@@ -8,16 +8,20 @@ import FilterSidebar, { Filters } from "@/components/FilterSidebar";
 export default function BoutiqueClient({
   products,
   initialCategory,
+  heading = "BOUTIQUE",
 }: {
   products: StoreProduct[];
   initialCategory?: string | null;
+  heading?: string;
 }) {
   const [filters, setFilters] = useState<Filters>({
     sizes: [],
     colors: [],
     priceRange: null,
     category:
-      initialCategory === "sneakers" || initialCategory === "vetements"
+      initialCategory === "sneakers" ||
+      initialCategory === "vetements" ||
+      initialCategory === "accessoires"
         ? initialCategory
         : null,
   });
@@ -45,7 +49,7 @@ export default function BoutiqueClient({
     <div className="bg-gray-light min-h-screen">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-black text-gray-900">BOUTIQUE</h1>
+          <h1 className="text-3xl font-black text-gray-900">{heading}</h1>
           <p className="text-sm text-gray-500 mt-1">
             {filteredProducts.length} produit{filteredProducts.length !== 1 ? "s" : ""}
           </p>

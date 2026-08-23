@@ -1,22 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import Logo from "./Logo";
 
 export default function Header() {
   const { openCart, totalItems } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Read the query string from the browser instead of useSearchParams(), which
+  // would force every page out of static prerendering.
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    setQuery(window.location.search);
+  }, [pathname]);
+
+  /** Highlights the entry matching the current path *and* query string. */
+  function isActive(href: string): boolean {
+    const [path, hrefQuery] = href.split("?");
+    if (path !== pathname) return false;
+    const current = new URLSearchParams(query);
+    if (!hrefQuery) {
+      // Plain /boutique is only active when no category/new filter is applied.
+      return !current.get("cat") && !current.get("new");
+    }
+    const [key, val] = hrefQuery.split("=");
+    return current.get(key) === val;
+  }
 
   const navLinks = [
-    { href: "/", label: "ACCUEIL", active: true },
-    { href: "/boutique", label: "BOUTIQUE", hasDropdown: true },
+    { href: "/", label: "ACCUEIL" },
+    { href: "/boutique", label: "BOUTIQUE" },
     { href: "/boutique?cat=sneakers", label: "SNEAKERS" },
     { href: "/boutique?cat=vetements", label: "VÊTEMENTS" },
+    { href: "/boutique?cat=accessoires", label: "ACCESSOIRES" },
     { href: "/boutique?new=true", label: "NOUVEAUTÉS" },
-    { href: "/boutique?promo=true", label: "PROMOTIONS" },
-    { href: "#about", label: "À PROPOS" },
+    { href: "/promotions", label: "PROMOTIONS" },
+    { href: "/a-propos", label: "À PROPOS" },
   ];
 
   return (
@@ -28,25 +51,18 @@ export default function Header() {
         </Link>
 
         {/* Desktop Navigation */}
-        <div className="hidden lg:flex items-center gap-6">
+        <div className="hidden lg:flex items-center gap-5">
           {navLinks.map((link) => (
             <Link
               key={link.label}
               href={link.href}
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                link.active
+              className={`text-[13px] font-medium transition-colors hover:text-primary whitespace-nowrap ${
+                isActive(link.href)
                   ? "text-primary border-b-2 border-primary pb-1"
                   : "text-gray-800"
               }`}
             >
-              <span className="flex items-center gap-1">
-                {link.label}
-                {link.hasDropdown && (
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                )}
-              </span>
+              {link.label}
             </Link>
           ))}
         </div>
@@ -108,7 +124,7 @@ export default function Header() {
               key={link.label}
               href={link.href}
               className={`block text-sm font-medium ${
-                link.active ? "text-primary" : "text-gray-800"
+                isActive(link.href) ? "text-primary" : "text-gray-800"
               }`}
               onClick={() => setMobileMenuOpen(false)}
             >

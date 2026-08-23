@@ -110,7 +110,7 @@ export default function FilterSidebar({ onFilterChange }: FilterSidebarProps) {
           </button>
           {expandedSections.category && (
             <div className="space-y-2">
-              {["sneakers", "vetements"].map((cat) => (
+              {["sneakers", "vetements", "accessoires"].map((cat) => (
                 <label key={cat} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -119,7 +119,13 @@ export default function FilterSidebar({ onFilterChange }: FilterSidebarProps) {
                     onChange={() => selectCategory(cat)}
                     className="w-4 h-4 text-primary accent-primary"
                   />
-                  <span className="text-sm capitalize">{cat === "vetements" ? "Vêtements" : "Sneakers"}</span>
+                  <span className="text-sm">
+                    {cat === "vetements"
+                      ? "Vêtements"
+                      : cat === "accessoires"
+                      ? "Accessoires"
+                      : "Sneakers"}
+                  </span>
                 </label>
               ))}
             </div>
