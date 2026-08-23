@@ -28,6 +28,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Lets a local verification build write elsewhere than `.next`, so it can't
+  // clobber a running dev server. Vercel keeps using the default `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   allowedDevOrigins: ["192.168.2.153"],
   images: {
     remotePatterns: [
