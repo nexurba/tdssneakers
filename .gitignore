@@ -41,3 +41,6 @@ next-env.d.ts
 
 # local test scripts
 /scripts
+
+# dev-only image uploads (production uses Vercel Blob)
+/public/uploads
