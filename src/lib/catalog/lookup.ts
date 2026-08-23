@@ -27,10 +27,28 @@ export interface LookupResult {
   note?: string;
 }
 
+export type SearchProvider = "serper" | "google" | "none";
+
+/** Serper is preferred: a single key, no search-engine setup. */
+export function activeProvider(): SearchProvider {
+  if (process.env.SERPER_API_KEY) return "serper";
+  if (process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_ID) return "google";
+  return "none";
+}
+
 export function isLookupConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_ID
-  );
+  return activeProvider() !== "none";
+}
+
+/** Normalised search hit, shared by both providers. */
+interface SearchHit {
+  title?: string;
+  snippet?: string;
+  link?: string;
+  productName?: string;
+  productBrand?: string;
+  productDescription?: string;
+  price?: number;
 }
 
 interface CseItem {
@@ -42,6 +60,93 @@ interface CseItem {
     offer?: { price?: string; pricecurrency?: string }[];
     metatags?: Record<string, string>[];
   };
+}
+
+interface SerperOrganic {
+  title?: string;
+  snippet?: string;
+  link?: string;
+}
+
+interface SerperShopping {
+  title?: string;
+  source?: string;
+  link?: string;
+  price?: string;
+}
+
+function toNumber(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const n = Number(String(raw).replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+}
+
+/** Query Serper.dev (Google results via a single API key). */
+async function searchSerper(query: string): Promise<SearchHit[]> {
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: {
+      "X-API-KEY": process.env.SERPER_API_KEY!,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ q: query, num: 6 }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Serper HTTP ${res.status}`);
+
+  const json = (await res.json()) as {
+    organic?: SerperOrganic[];
+    shopping?: SerperShopping[];
+  };
+
+  const hits: SearchHit[] = (json.organic ?? []).map((o) => ({
+    title: o.title,
+    snippet: o.snippet,
+    link: o.link,
+  }));
+
+  // Shopping results carry reliable prices.
+  const shoppingPrice = (json.shopping ?? [])
+    .map((s) => toNumber(s.price))
+    .find((p) => p !== undefined);
+  if (shoppingPrice && hits.length > 0) {
+    hits[0].price = shoppingPrice;
+  }
+  return hits;
+}
+
+/** Query Google Programmable Search (richer structured pagemap data). */
+async function searchGoogle(query: string): Promise<SearchHit[]> {
+  const url = new URL("https://www.googleapis.com/customsearch/v1");
+  url.searchParams.set("key", process.env.GOOGLE_CSE_API_KEY!);
+  url.searchParams.set("cx", process.env.GOOGLE_CSE_ID!);
+  url.searchParams.set("q", query);
+  url.searchParams.set("num", "5");
+
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`Google CSE HTTP ${res.status}`);
+
+  const json = (await res.json()) as { items?: CseItem[] };
+  return (json.items ?? []).map((i) => ({
+    title: i.title,
+    snippet: i.snippet,
+    link: i.link,
+    productName: i.pagemap?.product?.[0]?.name,
+    productBrand: i.pagemap?.product?.[0]?.brand,
+    productDescription: i.pagemap?.product?.[0]?.description,
+    price: toNumber(i.pagemap?.offer?.[0]?.price),
+  }));
+}
+
+async function runSearch(query: string): Promise<SearchHit[]> {
+  switch (activeProvider()) {
+    case "serper":
+      return searchSerper(query);
+    case "google":
+      return searchGoogle(query);
+    default:
+      return [];
+  }
 }
 
 const KNOWN_BRANDS = [
@@ -87,17 +192,6 @@ function detectColor(text: string): string | undefined {
   return POPULAR_COLORS.find((c) => h.includes(c.name.toLowerCase()))?.name;
 }
 
-function detectPrice(items: CseItem[]): number | undefined {
-  for (const item of items) {
-    const raw = item.pagemap?.offer?.[0]?.price;
-    if (raw) {
-      const n = Number(String(raw).replace(/[^0-9.]/g, ""));
-      if (Number.isFinite(n) && n > 0) return Math.round(n);
-    }
-  }
-  return undefined;
-}
-
 /** Strip site suffixes like " | Nike CA" or " - StockX" from a title. */
 function cleanTitle(title: string): string {
   return title
@@ -137,7 +231,7 @@ export async function lookupProductByCode(
         ...offline,
         note: [
           insight.note,
-          "Recherche en ligne inactive (GOOGLE_CSE_API_KEY / GOOGLE_CSE_ID non définis) — seules les infos déduites du code sont pré-remplies.",
+          "Recherche en ligne inactive (définissez SERPER_API_KEY, ou GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID) — seules les infos déduites du code sont pré-remplies.",
         ]
           .filter(Boolean)
           .join(" "),
@@ -146,26 +240,15 @@ export async function lookupProductByCode(
   }
 
   const queries = buildSearchQueries(code);
-  let items: CseItem[] = [];
+  let items: SearchHit[] = [];
   let lastError: string | null = null;
 
   // Try each query variant until one returns results.
   for (const q of queries) {
-    const url = new URL("https://www.googleapis.com/customsearch/v1");
-    url.searchParams.set("key", process.env.GOOGLE_CSE_API_KEY!);
-    url.searchParams.set("cx", process.env.GOOGLE_CSE_ID!);
-    url.searchParams.set("q", q);
-    url.searchParams.set("num", "5");
-
     try {
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      if (!res.ok) {
-        lastError = `HTTP ${res.status}`;
-        continue;
-      }
-      const json = (await res.json()) as { items?: CseItem[] };
-      if (json.items && json.items.length > 0) {
-        items = json.items;
+      const hits = await runSearch(q);
+      if (hits.length > 0) {
+        items = hits;
         break;
       }
     } catch (err) {
@@ -192,20 +275,21 @@ export async function lookupProductByCode(
   }
 
   const first = items[0];
-  const product = first.pagemap?.product?.[0];
   const corpus = items
     .map((i) => `${i.title ?? ""} ${i.snippet ?? ""}`)
     .join(" ");
 
-  const rawTitle = product?.name || first.title || "";
+  const rawTitle = first.productName || first.title || "";
   const title = cleanTitle(rawTitle);
-  const brand = product?.brand || detectBrand(corpus);
+  const brand = first.productBrand || detectBrand(corpus);
 
   // Drop a leading brand from the name so "Nike Dunk Low" -> "Dunk Low".
   const name =
     brand && title.toLowerCase().startsWith(brand.toLowerCase())
       ? title.slice(brand.length).trim() || title
       : title;
+
+  const price = items.map((i) => i.price).find((p) => p !== undefined);
 
   // Merge: web-search findings win, offline code insight fills the gaps.
   return {
@@ -214,14 +298,16 @@ export async function lookupProductByCode(
       productCode,
       name: name || undefined,
       brand: brand || offline.brand,
-      description: product?.description || first.snippet || undefined,
+      description: first.productDescription || first.snippet || undefined,
       category: detectCategory(corpus) ?? offline.category,
       gender: detectGender(corpus),
       color: detectColor(corpus),
-      price: detectPrice(items),
+      price,
       sourceUrl: first.link,
       source: "search",
-      note: insight.note,
+      note: [insight.note, `Via ${activeProvider() === "serper" ? "Serper.dev" : "Google CSE"}.`]
+        .filter(Boolean)
+        .join(" "),
     },
   };
 }

@@ -25,6 +25,7 @@ export const productGenderEnum = pgEnum("product_gender", [
   "homme",
   "femme",
   "enfant",
+  "unisex"
 ]);
 
 export const orderStatusEnum = pgEnum("order_status", [

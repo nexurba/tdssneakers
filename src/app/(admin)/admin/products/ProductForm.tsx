@@ -41,7 +41,8 @@ export const emptyProductForm: ProductFormState = {
   variant: "",
   price: "",
   category: "sneakers",
-  gender: "",
+  // Default so the size chart is visible immediately for shoes/clothing.
+  gender: "homme",
   color: "",
   colorHex: "",
   images: [],
@@ -288,7 +289,7 @@ export default function ProductForm({
         )}
         <p className="text-[11px] text-gray-400 mt-1.5">
           Le code est normalisé automatiquement (ex: DN1772305 → DN1772-305) et la marque déduite.
-          Pour récupérer nom, description et prix en ligne, configurez GOOGLE_CSE_API_KEY et GOOGLE_CSE_ID.
+          Pour récupérer nom, description et prix en ligne, définissez SERPER_API_KEY (recommandé) ou GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID.
         </p>
       </section>
 
@@ -354,8 +355,13 @@ export default function ProductForm({
         <Field label="Marque">
           <input value={value.brand} onChange={(e) => set("brand", e.target.value)} className={inputCls} placeholder="Nike" />
         </Field>
-        <Field label="Variante / Coloris" required>
-          <input value={value.variant} onChange={(e) => set("variant", e.target.value)} className={inputCls} placeholder="Black Toe" />
+        <Field label="Code produit" required>
+          <input
+            value={value.productCode}
+            onChange={(e) => set("productCode", e.target.value)}
+            className={`${inputCls} font-mono`}
+            placeholder="DN1772-305"
+          />
         </Field>
         <Field label="Prix (CAD)" required>
           <input type="number" min="0" step="0.01" value={value.price} onChange={(e) => set("price", e.target.value)} className={inputCls} placeholder="220" />

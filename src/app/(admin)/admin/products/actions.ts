@@ -18,12 +18,12 @@ const FALLBACK_IMAGE =
 
 const productSchema = z.object({
   name: z.string().min(1, "Nom requis"),
-  variant: z.string().min(1, "Variante requise"),
+  variant: z.string().optional(),
   price: z.coerce.number().min(0, "Prix invalide"),
   category: z.enum(["sneakers", "vetements", "accessoires"]),
   gender: z.enum(["homme", "femme", "enfant"]).nullable().optional(),
   brand: z.string().optional(),
-  productCode: z.string().optional(),
+  productCode: z.string().min(1, "Code produit requis"),
   color: z.string().min(1, "Couleur requise"),
   colorHex: z.string().optional(),
   images: z.string().optional(),
@@ -72,7 +72,7 @@ function parseInput(formData: FormData): ProductInput {
     category: str(formData, "category"),
     gender: genderRaw === "" ? null : genderRaw,
     brand: str(formData, "brand") || undefined,
-    productCode: str(formData, "productCode") || undefined,
+    productCode: str(formData, "productCode"),
     color: str(formData, "color"),
     colorHex: str(formData, "colorHex") || undefined,
     images: str(formData, "images"),
@@ -107,7 +107,8 @@ function parseInput(formData: FormData): ProductInput {
 
   return {
     name: parsed.name,
-    variant: parsed.variant,
+    // The product code doubles as the variant identifier.
+    variant: (parsed.variant && parsed.variant.trim()) || parsed.productCode,
     price: parsed.price,
     category: parsed.category,
     gender: needsGender ? parsed.gender ?? null : null,
