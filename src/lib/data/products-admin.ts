@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, isDbConfigured } from "@/db";
 import { products, productVariants } from "@/db/schema";
 import { slugify } from "@/lib/utils/slug";
@@ -83,16 +83,47 @@ export async function updateProduct(
     })
     .where(eq(products.id, id));
 
-  // Replace variants to reflect the submitted size list.
-  await db.delete(productVariants).where(eq(productVariants.productId, id));
-  if (input.sizes.length > 0) {
+  // Reconcile variants with the submitted size list, preserving existing stock.
+  const existing = await db
+    .select()
+    .from(productVariants)
+    .where(eq(productVariants.productId, id));
+  const existingBySize = new Map(existing.map((v) => [v.size, v]));
+  const desired = new Set(input.sizes);
+
+  // Remove sizes that are no longer offered.
+  const toRemove = existing.filter((v) => !desired.has(v.size));
+  for (const v of toRemove) {
+    await db.delete(productVariants).where(eq(productVariants.id, v.id));
+  }
+
+  // Add new sizes (keep existing ones untouched to preserve their stock).
+  const toAdd = input.sizes.filter((s) => !existingBySize.has(s));
+  if (toAdd.length > 0) {
     await db.insert(productVariants).values(
-      input.sizes.map((size) => ({
+      toAdd.map((size) => ({
         productId: id,
         size,
         stock: input.stockBySize?.[size] ?? 25,
       }))
     );
+  }
+
+  // Apply explicit stock overrides when provided.
+  if (input.stockBySize) {
+    for (const [size, stock] of Object.entries(input.stockBySize)) {
+      if (existingBySize.has(size)) {
+        await db
+          .update(productVariants)
+          .set({ stock })
+          .where(
+            and(
+              eq(productVariants.productId, id),
+              eq(productVariants.size, size)
+            )
+          );
+      }
+    }
   }
 }
 
@@ -109,6 +140,11 @@ export async function setVariantStock(
   assertDb();
   await db
     .update(productVariants)
-    .set({ stock })
-    .where(eq(productVariants.productId, productId));
+    .set({ stock: Math.max(0, stock) })
+    .where(
+      and(
+        eq(productVariants.productId, productId),
+        eq(productVariants.size, size)
+      )
+    );
 }

@@ -12,7 +12,7 @@ function staticToStore(p: Product): StoreProduct {
   return {
     ...p,
     slug: slugify(p.name, p.variant),
-    images: [p.image],
+    images: p.images && p.images.length > 0 ? p.images : [p.image],
     description: null,
     stockBySize: Object.fromEntries(p.sizes.map((s) => [s, 25])),
     isActive: true,

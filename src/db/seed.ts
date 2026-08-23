@@ -36,7 +36,7 @@ async function main() {
         category: p.category,
         color: p.color,
         image: p.image,
-        images: [p.image],
+        images: p.images && p.images.length > 0 ? p.images : [p.image],
         isNew: p.isNew ?? false,
         isBestSeller: p.isBestSeller ?? false,
         isActive: true,

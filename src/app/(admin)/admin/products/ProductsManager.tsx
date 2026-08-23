@@ -16,10 +16,11 @@ interface FormState {
   category: "sneakers" | "vetements";
   sizes: string;
   color: string;
-  image: string;
+  images: string;
   description: string;
   isNew: boolean;
   isBestSeller: boolean;
+  stockBySize: Record<string, string>;
 }
 
 const emptyForm: FormState = {
@@ -29,11 +30,19 @@ const emptyForm: FormState = {
   category: "sneakers",
   sizes: "",
   color: "",
-  image: "",
+  images: "",
   description: "",
   isNew: false,
   isBestSeller: false,
+  stockBySize: {},
 };
+
+function parseSizes(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export default function ProductsManager({
   initialProducts,
@@ -77,10 +86,13 @@ export default function ProductsManager({
       category: p.category,
       sizes: p.sizes.join(", "),
       color: p.color,
-      image: p.image,
+      images: (p.images && p.images.length > 0 ? p.images : [p.image]).join("\n"),
       description: p.description ?? "",
       isNew: p.isNew ?? false,
       isBestSeller: p.isBestSeller ?? false,
+      stockBySize: Object.fromEntries(
+        Object.entries(p.stockBySize ?? {}).map(([s, n]) => [s, String(n)])
+      ),
     });
     setEditingId(p.id);
     setModalMode("edit");
@@ -99,11 +111,18 @@ export default function ProductsManager({
     fd.set("price", form.price);
     fd.set("category", form.category);
     fd.set("color", form.color);
-    fd.set("image", form.image);
+    fd.set("images", form.images);
     fd.set("description", form.description);
     fd.set("sizes", form.sizes);
     fd.set("isNew", form.isNew ? "true" : "false");
     fd.set("isBestSeller", form.isBestSeller ? "true" : "false");
+    // Only include stock for sizes currently listed.
+    const stock: Record<string, number> = {};
+    for (const size of parseSizes(form.sizes)) {
+      const raw = form.stockBySize[size];
+      if (raw !== undefined && raw !== "") stock[size] = Math.max(0, Number(raw) || 0);
+    }
+    fd.set("stockBySize", JSON.stringify(stock));
     return fd;
   }
 
@@ -312,16 +331,65 @@ export default function ProductsManager({
               <Field label="Tailles (séparées par des virgules)" required>
                 <input value={form.sizes} onChange={(e) => setField("sizes", e.target.value)} className={inputCls} placeholder="7, 8, 9, 10, 11" />
               </Field>
+
+              {parseSizes(form.sizes).length > 0 && (
+                <Field label="Stock par taille">
+                  <div className="flex flex-wrap gap-2">
+                    {parseSizes(form.sizes).map((size) => (
+                      <div key={size} className="flex items-center gap-1.5 border rounded-lg px-2 py-1">
+                        <span className="text-xs font-medium text-gray-600 min-w-[1.5rem]">{size}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={form.stockBySize[size] ?? ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              stockBySize: { ...prev.stockBySize, [size]: e.target.value },
+                            }))
+                          }
+                          placeholder="25"
+                          className="w-16 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Laissez vide pour conserver le stock actuel (ou 25 par défaut à la création).</p>
+                </Field>
+              )}
               <Field label="Couleur" required>
                 <input value={form.color} onChange={(e) => setField("color", e.target.value)} className={inputCls} placeholder="Noir" />
               </Field>
               <Field label="Description">
                 <textarea value={form.description} onChange={(e) => setField("description", e.target.value)} className={inputCls} rows={2} placeholder="Description du produit..." />
               </Field>
-              <Field label="Image (URL)">
-                <input type="url" value={form.image} onChange={(e) => setField("image", e.target.value)} className={inputCls} placeholder="https://images.unsplash.com/..." />
-                {form.image && (
-                  <img src={form.image} alt="Aperçu" className="mt-2 w-16 h-16 object-cover rounded-lg bg-gray-100" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+              <Field label="Images (une URL par ligne)">
+                <textarea
+                  value={form.images}
+                  onChange={(e) => setField("images", e.target.value)}
+                  className={inputCls}
+                  rows={3}
+                  placeholder={"https://images.unsplash.com/photo-1\nhttps://images.unsplash.com/photo-2"}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  La 1re image est la principale. Les suivantes sont défilables sur la fiche produit.
+                </p>
+                {form.images.trim() && (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {form.images
+                      .split(/[\n,]+/)
+                      .map((u) => u.trim())
+                      .filter(Boolean)
+                      .map((u, i) => (
+                        <img
+                          key={i}
+                          src={u}
+                          alt={`Aperçu ${i + 1}`}
+                          className="w-14 h-14 object-cover rounded-lg bg-gray-100 border"
+                          onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                        />
+                      ))}
+                  </div>
                 )}
               </Field>
               <div className="flex gap-6">

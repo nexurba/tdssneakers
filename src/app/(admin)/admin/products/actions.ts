@@ -16,12 +16,15 @@ const productSchema = z.object({
   price: z.coerce.number().min(0, "Prix invalide"),
   category: z.enum(["sneakers", "vetements"]),
   color: z.string().min(1, "Couleur requise"),
-  image: z.string().url("URL image invalide").or(z.literal("")),
+  images: z.string().optional(),
   description: z.string().optional(),
   sizes: z.string().min(1, "Au moins une taille"),
   isNew: z.boolean().optional(),
   isBestSeller: z.boolean().optional(),
 });
+
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1556906781-9a412961c28c?w=800&h=800&fit=crop";
 
 export interface ActionResult {
   ok: boolean;
@@ -35,7 +38,7 @@ function parseInput(formData: FormData): ProductInput {
     price: formData.get("price"),
     category: formData.get("category"),
     color: formData.get("color"),
-    image: formData.get("image") || "",
+    images: formData.get("images") || "",
     description: formData.get("description") || undefined,
     sizes: formData.get("sizes"),
     isNew: formData.get("isNew") === "on" || formData.get("isNew") === "true",
@@ -44,21 +47,47 @@ function parseInput(formData: FormData): ProductInput {
       formData.get("isBestSeller") === "true",
   };
   const parsed = productSchema.parse(raw);
+
+  // Accept one image URL per line (or comma-separated).
+  const imageList = (parsed.images ?? "")
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const image = imageList[0] || FALLBACK_IMAGE;
+
   return {
     name: parsed.name,
     variant: parsed.variant,
     price: parsed.price,
     category: parsed.category,
     color: parsed.color,
-    image:
-      parsed.image ||
-      "https://images.unsplash.com/photo-1556906781-9a412961c28c?w=600&h=600&fit=crop",
+    image,
+    images: imageList.length > 0 ? imageList : [image],
     description: parsed.description ?? null,
     sizes: parsed.sizes.split(",").map((s) => s.trim()).filter(Boolean),
+    stockBySize: parseStock(formData.get("stockBySize")),
     isNew: parsed.isNew,
     isBestSeller: parsed.isBestSeller,
     isActive: true,
   };
+}
+
+function parseStock(
+  raw: FormDataEntryValue | null
+): Record<string, number> | undefined {
+  if (typeof raw !== "string" || !raw) return undefined;
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<string, number> = {};
+    for (const [size, value] of Object.entries(obj)) {
+      const n = Number(value);
+      if (Number.isFinite(n)) out[size] = Math.max(0, Math.trunc(n));
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function createProductAction(

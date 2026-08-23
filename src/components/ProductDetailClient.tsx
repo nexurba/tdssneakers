@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { StoreProduct } from "@/lib/data/types";
 import { useCart } from "@/context/CartContext";
 
@@ -9,8 +9,29 @@ export default function ProductDetailClient({ product }: { product: StoreProduct
   const [selectedSize, setSelectedSize] = useState<string | null>(
     product.sizes[0] ?? null
   );
-  const [activeImage, setActiveImage] = useState(product.image);
-  const images = product.images && product.images.length > 0 ? product.images : [product.image];
+  const images =
+    product.images && product.images.length > 0 ? product.images : [product.image];
+  const [index, setIndex] = useState(0);
+
+  const goPrev = useCallback(
+    () => setIndex((i) => (i - 1 + images.length) % images.length),
+    [images.length]
+  );
+  const goNext = useCallback(
+    () => setIndex((i) => (i + 1) % images.length),
+    [images.length]
+  );
+
+  // Keyboard navigation for the gallery.
+  useEffect(() => {
+    if (images.length <= 1) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "ArrowRight") goNext();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [goPrev, goNext, images.length]);
 
   const stockForSize = selectedSize ? product.stockBySize?.[selectedSize] ?? 0 : 0;
   const outOfStock = selectedSize !== null && stockForSize <= 0;
@@ -25,20 +46,68 @@ export default function ProductDetailClient({ product }: { product: StoreProduct
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
       {/* Gallery */}
       <div>
-        <div className="aspect-square bg-gray-100 rounded-2xl overflow-hidden">
-          <img src={activeImage} alt={product.name} className="w-full h-full object-cover" />
+        <div className="relative aspect-square bg-gray-100 rounded-2xl overflow-hidden group">
+          <img
+            src={images[index]}
+            alt={`${product.name} — image ${index + 1}`}
+            className="w-full h-full object-cover transition-opacity duration-300"
+          />
+
+          {images.length > 1 && (
+            <>
+              {/* Prev / Next arrows */}
+              <button
+                onClick={goPrev}
+                aria-label="Image précédente"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur flex items-center justify-center shadow hover:bg-white transition-colors md:opacity-0 md:group-hover:opacity-100"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={goNext}
+                aria-label="Image suivante"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur flex items-center justify-center shadow hover:bg-white transition-colors md:opacity-0 md:group-hover:opacity-100"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Counter */}
+              <span className="absolute bottom-3 right-3 text-xs font-medium bg-black/60 text-white px-2 py-1 rounded-full">
+                {index + 1} / {images.length}
+              </span>
+
+              {/* Dots */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setIndex(i)}
+                    aria-label={`Aller à l'image ${i + 1}`}
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === index ? "w-5 bg-white" : "w-1.5 bg-white/60"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
+
         {images.length > 1 && (
           <div className="flex gap-2 mt-3">
-            {images.map((img, i) => (
+            {images.map((image, i) => (
               <button
                 key={i}
-                onClick={() => setActiveImage(img)}
+                onClick={() => setIndex(i)}
                 className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
-                  activeImage === img ? "border-primary" : "border-transparent"
+                  i === index ? "border-primary" : "border-transparent hover:border-gray-300"
                 }`}
               >
-                <img src={img} alt={`${product.name} ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={image} alt={`${product.name} ${i + 1}`} className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
