@@ -65,7 +65,7 @@ export default function ProductForm({
   mode: "add" | "edit";
 }) {
   const [isPending, startTransition] = useTransition();
-  const [lookupMsg, setLookupMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [lookupMsg, setLookupMsg] = useState<{ type: "ok" | "err" | "info"; text: string } | null>(null);
   const [uploadMsg, setUploadMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -124,6 +124,11 @@ export default function ProductForm({
       const next: ProductFormState = { ...value };
       const filled: string[] = [];
 
+      // Normalised code (e.g. DN1772305 -> DN1772-305).
+      if (d.productCode && d.productCode !== value.productCode) {
+        next.productCode = d.productCode;
+        filled.push("code normalisé");
+      }
       if (d.name && !value.name) { next.name = d.name; filled.push("nom"); }
       if (d.brand && !value.brand) { next.brand = d.brand; filled.push("marque"); }
       if (d.description && !value.description) { next.description = d.description; filled.push("description"); }
@@ -140,11 +145,19 @@ export default function ProductForm({
       if (d.variant && !value.variant) { next.variant = d.variant; filled.push("variante"); }
 
       onChange(next);
+
+      const parts: string[] = [];
+      if (filled.length) {
+        parts.push(`Pré-rempli: ${filled.join(", ")}.`);
+      } else {
+        parts.push("Aucun champ vide à compléter.");
+      }
+      if (d.note) parts.push(d.note);
+      if (d.sourceUrl) parts.push(`Source: ${new URL(d.sourceUrl).hostname}`);
+
       setLookupMsg({
-        type: "ok",
-        text: filled.length
-          ? `Champs pré-remplis: ${filled.join(", ")}. Vérifiez avant d'enregistrer.`
-          : "Résultat trouvé mais aucun champ vide à remplir.",
+        type: d.source === "search" ? "ok" : "info",
+        text: parts.join(" "),
       });
     });
   }
@@ -261,10 +274,22 @@ export default function ProductForm({
           </button>
         </div>
         {lookupMsg && (
-          <p className={`text-xs mt-2 ${lookupMsg.type === "ok" ? "text-green-600" : "text-amber-700"}`}>
+          <p
+            className={`text-xs mt-2 ${
+              lookupMsg.type === "ok"
+                ? "text-green-600"
+                : lookupMsg.type === "info"
+                ? "text-gray-600"
+                : "text-amber-700"
+            }`}
+          >
             {lookupMsg.text}
           </p>
         )}
+        <p className="text-[11px] text-gray-400 mt-1.5">
+          Le code est normalisé automatiquement (ex: DN1772305 → DN1772-305) et la marque déduite.
+          Pour récupérer nom, description et prix en ligne, configurez GOOGLE_CSE_API_KEY et GOOGLE_CSE_ID.
+        </p>
       </section>
 
       {/* ---- Category (drives the rest of the form) ---- */}

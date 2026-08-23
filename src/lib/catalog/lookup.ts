@@ -4,6 +4,7 @@ import {
   ProductGender,
   POPULAR_COLORS,
 } from "./taxonomy";
+import { parseProductCode, buildSearchQueries } from "./product-code";
 
 /**
  * Product details inferred from a web search on a product/style code.
@@ -20,6 +21,10 @@ export interface LookupResult {
   color?: string;
   price?: number;
   sourceUrl?: string;
+  /** Where the data came from: offline code parsing or a web search. */
+  source?: "code" | "search";
+  /** Human-readable context shown under the Fetch Details button. */
+  note?: string;
 }
 
 export function isLookupConfigured(): boolean {
@@ -108,41 +113,82 @@ function cleanTitle(title: string): string {
 export async function lookupProductByCode(
   code: string
 ): Promise<{ ok: true; data: LookupResult } | { ok: false; error: string }> {
-  const productCode = code.trim();
-  if (!productCode) {
+  if (!code.trim()) {
     return { ok: false, error: "Code produit requis." };
   }
+
+  // Step 1 — always available: parse the style code offline.
+  const insight = parseProductCode(code);
+  const productCode = insight.normalized;
+
+  const offline: LookupResult = {
+    productCode,
+    brand: insight.brand,
+    category: insight.category,
+    source: "code",
+    note: insight.note,
+  };
+
+  // Step 2 — enrich with web search when a provider is configured.
   if (!isLookupConfigured()) {
     return {
-      ok: false,
-      error:
-        "Recherche en ligne non configurée. Ajoutez GOOGLE_CSE_API_KEY et GOOGLE_CSE_ID dans les variables d'environnement.",
+      ok: true,
+      data: {
+        ...offline,
+        note: [
+          insight.note,
+          "Recherche en ligne inactive (GOOGLE_CSE_API_KEY / GOOGLE_CSE_ID non définis) — seules les infos déduites du code sont pré-remplies.",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
     };
   }
 
-  const url = new URL("https://www.googleapis.com/customsearch/v1");
-  url.searchParams.set("key", process.env.GOOGLE_CSE_API_KEY!);
-  url.searchParams.set("cx", process.env.GOOGLE_CSE_ID!);
-  url.searchParams.set("q", `${productCode} sneaker OR apparel product`);
-  url.searchParams.set("num", "5");
-
+  const queries = buildSearchQueries(code);
   let items: CseItem[] = [];
-  try {
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: `Recherche échouée (HTTP ${res.status}). Vérifiez vos clés Google CSE.`,
-      };
+  let lastError: string | null = null;
+
+  // Try each query variant until one returns results.
+  for (const q of queries) {
+    const url = new URL("https://www.googleapis.com/customsearch/v1");
+    url.searchParams.set("key", process.env.GOOGLE_CSE_API_KEY!);
+    url.searchParams.set("cx", process.env.GOOGLE_CSE_ID!);
+    url.searchParams.set("q", q);
+    url.searchParams.set("num", "5");
+
+    try {
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) {
+        lastError = `HTTP ${res.status}`;
+        continue;
+      }
+      const json = (await res.json()) as { items?: CseItem[] };
+      if (json.items && json.items.length > 0) {
+        items = json.items;
+        break;
+      }
+    } catch (err) {
+      lastError = (err as Error).message;
     }
-    const json = (await res.json()) as { items?: CseItem[] };
-    items = json.items ?? [];
-  } catch (err) {
-    return { ok: false, error: `Recherche indisponible: ${(err as Error).message}` };
   }
 
+  // Offline insight is still valuable if the search found nothing.
   if (items.length === 0) {
-    return { ok: false, error: `Aucun résultat pour le code « ${productCode} ».` };
+    return {
+      ok: true,
+      data: {
+        ...offline,
+        note: [
+          insight.note,
+          lastError
+            ? `Recherche en ligne indisponible (${lastError}).`
+            : `Aucun résultat en ligne pour « ${productCode} ».`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    };
   }
 
   const first = items[0];
@@ -161,18 +207,21 @@ export async function lookupProductByCode(
       ? title.slice(brand.length).trim() || title
       : title;
 
+  // Merge: web-search findings win, offline code insight fills the gaps.
   return {
     ok: true,
     data: {
       productCode,
       name: name || undefined,
-      brand: brand || undefined,
+      brand: brand || offline.brand,
       description: product?.description || first.snippet || undefined,
-      category: detectCategory(corpus),
+      category: detectCategory(corpus) ?? offline.category,
       gender: detectGender(corpus),
       color: detectColor(corpus),
       price: detectPrice(items),
       sourceUrl: first.link,
+      source: "search",
+      note: insight.note,
     },
   };
 }
