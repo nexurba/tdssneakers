@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { StoreProduct } from "@/lib/data/types";
 import ProductCard from "@/components/ProductCard";
 import FilterSidebar, { Filters } from "@/components/FilterSidebar";
@@ -48,6 +49,12 @@ export default function BoutiqueClient({
   return (
     <div className="bg-gray-light min-h-screen">
       <div className="max-w-7xl mx-auto px-4 py-8">
+        <nav className="text-sm text-gray-500 mb-4 flex items-center gap-2">
+          <Link href="/" className="hover:text-primary">Accueil</Link>
+          <span>/</span>
+          <span className="text-gray-900">{heading}</span>
+        </nav>
+
         <div className="mb-8">
           <h1 className="text-3xl font-black text-gray-900">{heading}</h1>
           <p className="text-sm text-gray-500 mt-1">

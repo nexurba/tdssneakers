@@ -1,11 +1,26 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 
 export default function CartDrawer() {
   const { isOpen, closeCart, items, removeFromCart, updateQuantity, totalPrice } =
     useCart();
+
+  // Escape closes the drawer, and the page behind it must not scroll.
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeCart();
+    }
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [isOpen, closeCart]);
 
   return (
     <>
