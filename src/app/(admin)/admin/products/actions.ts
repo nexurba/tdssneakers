@@ -10,7 +10,7 @@ import {
 } from "@/lib/data/products-admin";
 import { isDbConfigured } from "@/db";
 import { uploadProductImage, isBlobConfigured } from "@/lib/storage/blob";
-import { lookupProductByCode, type LookupResult } from "@/lib/catalog/lookup";
+import { parseProductCode } from "@/lib/catalog/product-code";
 import { requiresGender, requiresSizes } from "@/lib/catalog/taxonomy";
 import {
   toCanonicalSizes,
@@ -251,12 +251,33 @@ export async function uploadImagesAction(
   };
 }
 
-// ---- Product code lookup -----------------------------------------------------
+// ---- Product code analysis (local, no network) -------------------------------
 
-export async function lookupProductAction(
+export interface CodeAnalysis {
+  productCode: string;
+  brand?: string;
+  category?: "sneakers" | "vetements" | "accessoires";
+  note?: string;
+}
+
+/**
+ * Analyse a style code locally: normalise its format and infer brand and
+ * category from the pattern. No external service involved.
+ */
+export async function analyzeProductCodeAction(
   code: string
-): Promise<{ ok: boolean; data?: LookupResult; error?: string }> {
-  const result = await lookupProductByCode(code);
-  if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+): Promise<{ ok: boolean; data?: CodeAnalysis; error?: string }> {
+  if (!code.trim()) {
+    return { ok: false, error: "Entrez un code produit." };
+  }
+  const insight = parseProductCode(code);
+  return {
+    ok: true,
+    data: {
+      productCode: insight.normalized,
+      brand: insight.brand,
+      category: insight.category,
+      note: insight.note,
+    },
+  };
 }

@@ -18,7 +18,7 @@ import {
   toSizePair,
   type SizeScale,
 } from "@/lib/catalog/size-conversion";
-import { uploadImagesAction, lookupProductAction } from "./actions";
+import { uploadImagesAction, analyzeProductCodeAction } from "./actions";
 
 export interface ProductFormState {
   productCode: string;
@@ -122,18 +122,18 @@ export default function ProductForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.category]);
 
-  // ---- Product code lookup ---------------------------------------------------
+  // ---- Product code analysis (local) -----------------------------------------
 
-  function fetchDetails() {
+  function analyzeCode() {
     if (!value.productCode.trim()) {
       setLookupMsg({ type: "err", text: "Entrez un code produit." });
       return;
     }
     setLookupMsg(null);
     startTransition(async () => {
-      const res = await lookupProductAction(value.productCode);
+      const res = await analyzeProductCodeAction(value.productCode);
       if (!res.ok || !res.data) {
-        setLookupMsg({ type: "err", text: res.error ?? "Recherche échouée." });
+        setLookupMsg({ type: "err", text: res.error ?? "Analyse impossible." });
         return;
       }
       const d = res.data;
@@ -145,36 +145,20 @@ export default function ProductForm({
         next.productCode = d.productCode;
         filled.push("code normalisé");
       }
-      if (d.name && !value.name) { next.name = d.name; filled.push("nom"); }
       if (d.brand && !value.brand) { next.brand = d.brand; filled.push("marque"); }
-      if (d.description && !value.description) { next.description = d.description; filled.push("description"); }
-      if (d.price && !value.price) { next.price = String(d.price); filled.push("prix"); }
       if (d.category) { next.category = d.category; filled.push("catégorie"); }
-      if (d.gender && requiresGender(d.category ?? next.category)) {
-        next.gender = d.gender; filled.push("genre");
-      }
-      if (d.color && !value.color) {
-        next.color = d.color;
-        next.colorHex = findColor(d.color)?.hex ?? "";
-        filled.push("couleur");
-      }
-      if (d.variant && !value.variant) { next.variant = d.variant; filled.push("variante"); }
 
       onChange(next);
 
       const parts: string[] = [];
-      if (filled.length) {
-        parts.push(`Pré-rempli: ${filled.join(", ")}.`);
-      } else {
-        parts.push("Aucun champ vide à compléter.");
-      }
+      parts.push(
+        filled.length
+          ? `Appliqué: ${filled.join(", ")}.`
+          : "Rien à compléter (champs déjà remplis)."
+      );
       if (d.note) parts.push(d.note);
-      if (d.sourceUrl) parts.push(`Source: ${new URL(d.sourceUrl).hostname}`);
 
-      setLookupMsg({
-        type: d.source === "search" ? "ok" : "info",
-        text: parts.join(" "),
-      });
+      setLookupMsg({ type: filled.length ? "ok" : "info", text: parts.join(" ") });
     });
   }
 
@@ -261,32 +245,32 @@ export default function ProductForm({
 
   return (
     <div className="space-y-6">
-      {/* ---- Smart auto-population ---- */}
+      {/* ---- Code analysis (local) ---- */}
       <section className="bg-gray-50 border border-gray-200 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          <h3 className="text-sm font-semibold text-gray-900">Pré-remplissage automatique</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Analyse du code produit</h3>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={value.productCode}
             onChange={(e) => set("productCode", e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); fetchDetails(); } }}
-            className={inputCls}
-            placeholder="Code produit / style (ex: DD1391-100)"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); analyzeCode(); } }}
+            className={`${inputCls} font-mono`}
+            placeholder="Code produit / style (ex: DN1772305)"
           />
           <button
             type="button"
-            onClick={fetchDetails}
+            onClick={analyzeCode}
             disabled={isPending}
             className="shrink-0 inline-flex items-center justify-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 cursor-pointer"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            {isPending ? "Recherche..." : "Récupérer les détails"}
+            {isPending ? "Analyse..." : "Analyser le code"}
           </button>
         </div>
         {lookupMsg && (
@@ -303,8 +287,8 @@ export default function ProductForm({
           </p>
         )}
         <p className="text-[11px] text-gray-400 mt-1.5">
-          Le code est normalisé automatiquement (ex: DN1772305 → DN1772-305) et la marque déduite.
-          Pour récupérer nom, description et prix en ligne, définissez SERPER_API_KEY (recommandé) ou GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID.
+          Normalise le format (ex: DN1772305 → DN1772-305) et déduit la marque et la catégorie
+          à partir du code. Traitement local, aucun service externe.
         </p>
       </section>
 

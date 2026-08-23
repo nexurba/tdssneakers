@@ -116,21 +116,4 @@ export function parseProductCode(raw: string): CodeInsight {
   };
 }
 
-/**
- * Search-engine query variants to try for a given code, best first.
- * Both the dashed and undashed forms are useful since retailers differ.
- */
-export function buildSearchQueries(raw: string): string[] {
-  const insight = parseProductCode(raw);
-  const code = insight.normalized;
-  const bare = code.replace(/-/g, "");
-  const brand = insight.brand ? `${insight.brand} ` : "";
 
-  return Array.from(
-    new Set([
-      `${brand}${code} sneaker`.trim(),
-      `${code}`,
-      `${bare}`,
-    ])
-  );
-}
