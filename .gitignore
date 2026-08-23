@@ -44,3 +44,4 @@ next-env.d.ts
 
 # dev-only image uploads (production uses Vercel Blob)
 /public/uploads
+.env*
