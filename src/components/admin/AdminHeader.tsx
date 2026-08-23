@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutAction } from "@/app/(admin)/admin/auth-actions";
+import Logo from "@/components/Logo";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
@@ -27,16 +28,21 @@ export default function AdminHeader() {
   return (
     <header className="bg-white border-b sticky top-0 z-40">
       <div className="flex items-center justify-between px-6 py-4">
-        {/* Mobile menu button */}
-        <button
-          className="lg:hidden p-2 -ml-2"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Menu"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        {/* Mobile: menu + logo (sidebar is hidden below lg) */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <button
+            className="p-2 -ml-2"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <Link href="/admin" aria-label="TDSSNEAKERS — tableau de bord">
+            <Logo width={110} className="h-auto w-[110px]" />
+          </Link>
+        </div>
 
         {/* Search */}
         <div className="hidden md:flex items-center flex-1 max-w-md">

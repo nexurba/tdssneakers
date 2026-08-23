@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Logo from "@/components/Logo";
 
 const navItems = [
   {
@@ -58,15 +59,10 @@ export default function AdminSidebar() {
   return (
     <aside className="w-64 bg-gray-900 text-white min-h-screen flex-shrink-0 hidden lg:block">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
-        <Link href="/admin" className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-white font-black text-xs">TDS</span>
-          </div>
-          <div>
-            <p className="font-bold text-sm">TDSSNEAKERS</p>
-            <p className="text-[10px] text-gray-400">Admin Portal</p>
-          </div>
+      <div className="p-5 border-b border-gray-800">
+        <Link href="/admin" className="block" aria-label="TDSSNEAKERS — tableau de bord">
+          <Logo width={180} className="h-auto w-[180px]" />
+          <p className="text-[10px] text-gray-400 mt-1.5 tracking-wide">ADMIN PORTAL</p>
         </Link>
       </div>
 

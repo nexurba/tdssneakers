@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Logo from "./Logo";
 
 export default function Footer() {
   return (
@@ -30,11 +31,9 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
           {/* Logo */}
           <div>
-            <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-4">
-              <span className="text-white font-black text-xs text-center leading-tight">
-                TDS<br/>SNEAKERS
-              </span>
-            </div>
+            <Link href="/" aria-label="TDSSNEAKERS — accueil">
+              <Logo width={170} className="h-auto w-[170px] mb-4" />
+            </Link>
           </div>
 
           {/* Boutique */}

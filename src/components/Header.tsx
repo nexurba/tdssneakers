@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
+import Logo from "./Logo";
 
 export default function Header() {
   const { openCart, totalItems } = useCart();
@@ -22,12 +23,8 @@ export default function Header() {
     <header className="sticky top-0 z-50 bg-white shadow-sm">
       <nav className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex-shrink-0">
-          <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center overflow-hidden">
-            <span className="text-white font-black text-xs leading-tight text-center">
-              TDS<br/>SNEAKERS
-            </span>
-          </div>
+        <Link href="/" className="flex-shrink-0" aria-label="TDSSNEAKERS — accueil">
+          <Logo width={150} priority className="h-auto w-[120px] sm:w-[150px]" />
         </Link>
 
         {/* Desktop Navigation */}

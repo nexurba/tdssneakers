@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signInAction } from "./auth-actions";
+import Logo from "@/components/Logo";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -27,11 +28,10 @@ export default function AdminLogin() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-black text-sm">TDS</span>
+            <div className="bg-gray-900 rounded-2xl px-4 py-5 mb-4">
+              <Logo width={200} priority className="h-auto w-[200px] mx-auto" />
             </div>
             <h1 className="text-xl font-bold text-gray-900">Admin Portal</h1>
-            <p className="text-sm text-gray-500 mt-1">TDSSNEAKERS</p>
           </div>
 
           <div className="space-y-4">
