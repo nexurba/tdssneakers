@@ -47,6 +47,9 @@ function productToForm(p: StoreProduct): ProductFormState {
     stockBySize: Object.fromEntries(
       Object.entries(p.stockBySize ?? {}).map(([s, n]) => [s, String(n)])
     ),
+    quantity: String(
+      Object.values(p.stockBySize ?? {}).reduce((a, b) => a + b, 0) || 1
+    ),
     isNew: p.isNew ?? false,
     isBestSeller: p.isBestSeller ?? false,
   };
@@ -67,6 +70,7 @@ function formToFormData(form: ProductFormState): FormData {
   fd.set("images", form.images.join("\n"));
   fd.set("description", form.description);
   fd.set("sizes", form.sizes.join(","));
+  fd.set("quantity", form.quantity);
   fd.set("isNew", form.isNew ? "true" : "false");
   fd.set("isBestSeller", form.isBestSeller ? "true" : "false");
 
@@ -326,11 +330,13 @@ export default function ProductsManager({
         )}
       </div>
 
-      {/* Modal with the dynamic form */}
+      {/* Modal with the dynamic form.
+          Fixed-height flex column: only the body scrolls, so the header and
+          action buttons stay visible and no field can get clipped. */}
       {modalMode && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-2xl my-8">
-            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-2xl z-10">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl">
+            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b">
               <h2 className="text-lg font-bold">
                 {modalMode === "add" ? "Nouveau produit" : "Modifier le produit"}
               </h2>
@@ -341,15 +347,15 @@ export default function ProductsManager({
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
               <ProductForm value={form} onChange={setForm} mode={modalMode} />
             </div>
 
-            <div className="flex gap-3 p-6 border-t sticky bottom-0 bg-white rounded-b-2xl">
+            <div className="shrink-0 flex gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
               <button
                 type="button"
                 onClick={close}
-                className="flex-1 px-4 py-2.5 border rounded-lg text-sm font-medium hover:bg-gray-50 cursor-pointer"
+                className="flex-1 sm:flex-none sm:px-6 px-4 py-2.5 border bg-white rounded-lg text-sm font-medium hover:bg-gray-100 cursor-pointer"
               >
                 Annuler
               </button>

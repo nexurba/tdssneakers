@@ -9,9 +9,8 @@ import {
   type ProductInput,
 } from "@/lib/data/products-admin";
 import { isDbConfigured } from "@/db";
-import { uploadProductImage, isBlobConfigured } from "@/lib/storage/blob";
-import { parseProductCode } from "@/lib/catalog/product-code";
-import { requiresGender, requiresSizes } from "@/lib/catalog/taxonomy";
+import { uploadProductImage, isUploadAvailable } from "@/lib/storage/blob";
+import { requiresGender, requiresSizes, ONE_SIZE } from "@/lib/catalog/taxonomy";
 import {
   toCanonicalSizes,
   toSizePair,
@@ -52,6 +51,13 @@ function str(fd: FormData, key: string): string {
 function bool(fd: FormData, key: string): boolean {
   const v = str(fd, key);
   return v === "true" || v === "on";
+}
+
+/** Single quantity for categories without sizes. Defaults to 1. */
+function parseQuantity(raw: FormDataEntryValue | null): number {
+  if (typeof raw !== "string" || raw.trim() === "") return 1;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 1;
 }
 
 function parseStock(raw: FormDataEntryValue | null): Record<string, number> | undefined {
@@ -148,8 +154,12 @@ function parseInput(formData: FormData): ProductInput {
     image,
     images: imageList.length > 0 ? imageList : [image],
     description: parsed.description ?? null,
-    sizes: needsSizes ? sizeList : [],
-    stockBySize: needsSizes ? stockBySize : undefined,
+    // Accessories carry a single one-size variant so they still have a
+    // quantity, appear in stock filtering, and can be added to the cart.
+    sizes: needsSizes ? sizeList : [ONE_SIZE],
+    stockBySize: needsSizes
+      ? stockBySize
+      : { [ONE_SIZE]: parseQuantity(formData.get("quantity")) },
     isNew: parsed.isNew,
     isBestSeller: parsed.isBestSeller,
     isActive: true,
@@ -219,7 +229,7 @@ export async function deleteProductAction(id: number): Promise<ActionResult> {
 export async function uploadImagesAction(
   formData: FormData
 ): Promise<{ ok: boolean; urls: string[]; error?: string }> {
-  if (!isBlobConfigured()) {
+  if (!isUploadAvailable()) {
     return {
       ok: false,
       urls: [],
@@ -251,33 +261,4 @@ export async function uploadImagesAction(
   };
 }
 
-// ---- Product code analysis (local, no network) -------------------------------
 
-export interface CodeAnalysis {
-  productCode: string;
-  brand?: string;
-  category?: "sneakers" | "vetements" | "accessoires";
-  note?: string;
-}
-
-/**
- * Analyse a style code locally: normalise its format and infer brand and
- * category from the pattern. No external service involved.
- */
-export async function analyzeProductCodeAction(
-  code: string
-): Promise<{ ok: boolean; data?: CodeAnalysis; error?: string }> {
-  if (!code.trim()) {
-    return { ok: false, error: "Entrez un code produit." };
-  }
-  const insight = parseProductCode(code);
-  return {
-    ok: true,
-    data: {
-      productCode: insight.normalized,
-      brand: insight.brand,
-      category: insight.category,
-      note: insight.note,
-    },
-  };
-}

@@ -37,6 +37,16 @@ export function requiresSizes(category: ProductCategory): boolean {
   return categoryConfig(category).requiresSizes;
 }
 
+/**
+ * Sentinel size for categories without sizing (accessories). Gives them a
+ * variant row so quantity, stock filtering and add-to-cart all work uniformly.
+ */
+export const ONE_SIZE = "TU";
+
+export function isOneSize(size: string): boolean {
+  return size === ONE_SIZE;
+}
+
 // ---- Size charts -------------------------------------------------------------
 
 /** US shoe sizing (common retail range), per gender. */

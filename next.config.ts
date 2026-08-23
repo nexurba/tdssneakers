@@ -31,7 +31,14 @@ const nextConfig: NextConfig = {
   // Lets a local verification build write elsewhere than `.next`, so it can't
   // clobber a running dev server. Vercel keeps using the default `.next`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  allowedDevOrigins: ["192.168.2.153"],
+  allowedDevOrigins: ["192.168.2.153", "172.20.10.5"],
+  experimental: {
+    serverActions: {
+      // Product photos are routed through a Server Action; the 1 MB default
+      // rejects normal camera images with a 413.
+      bodySizeLimit: "25mb",
+    },
+  },
   images: {
     remotePatterns: [
       {

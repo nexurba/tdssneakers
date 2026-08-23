@@ -18,7 +18,7 @@ import {
   toSizePair,
   type SizeScale,
 } from "@/lib/catalog/size-conversion";
-import { uploadImagesAction, analyzeProductCodeAction } from "./actions";
+import { uploadImagesAction } from "./actions";
 
 export interface ProductFormState {
   productCode: string;
@@ -36,6 +36,8 @@ export interface ProductFormState {
   description: string;
   sizes: string[];
   stockBySize: Record<string, string>;
+  /** Single quantity for categories without sizes (accessories). */
+  quantity: string;
   isNew: boolean;
   isBestSeller: boolean;
 }
@@ -56,6 +58,7 @@ export const emptyProductForm: ProductFormState = {
   description: "",
   sizes: [],
   stockBySize: {},
+  quantity: "1",
   isNew: false,
   isBestSeller: false,
 };
@@ -73,7 +76,7 @@ export default function ProductForm({
   mode: "add" | "edit";
 }) {
   const [isPending, startTransition] = useTransition();
-  const [lookupMsg, setLookupMsg] = useState<{ type: "ok" | "err" | "info"; text: string } | null>(null);
+
   const [uploadMsg, setUploadMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -122,63 +125,75 @@ export default function ProductForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.category]);
 
-  // ---- Product code analysis (local) -----------------------------------------
-
-  function analyzeCode() {
-    if (!value.productCode.trim()) {
-      setLookupMsg({ type: "err", text: "Entrez un code produit." });
-      return;
-    }
-    setLookupMsg(null);
-    startTransition(async () => {
-      const res = await analyzeProductCodeAction(value.productCode);
-      if (!res.ok || !res.data) {
-        setLookupMsg({ type: "err", text: res.error ?? "Analyse impossible." });
-        return;
-      }
-      const d = res.data;
-      const next: ProductFormState = { ...value };
-      const filled: string[] = [];
-
-      // Normalised code (e.g. DN1772305 -> DN1772-305).
-      if (d.productCode && d.productCode !== value.productCode) {
-        next.productCode = d.productCode;
-        filled.push("code normalisé");
-      }
-      if (d.brand && !value.brand) { next.brand = d.brand; filled.push("marque"); }
-      if (d.category) { next.category = d.category; filled.push("catégorie"); }
-
-      onChange(next);
-
-      const parts: string[] = [];
-      parts.push(
-        filled.length
-          ? `Appliqué: ${filled.join(", ")}.`
-          : "Rien à compléter (champs déjà remplis)."
-      );
-      if (d.note) parts.push(d.note);
-
-      setLookupMsg({ type: filled.length ? "ok" : "info", text: parts.join(" ") });
-    });
-  }
-
   // ---- Image upload ----------------------------------------------------------
 
-  function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const fd = new FormData();
-    Array.from(files).forEach((f) => fd.append("files", f));
+  const MAX_FILE_BYTES = 8 * 1024 * 1024; // matches the server-side check
+
+  function handleFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+
+    // Validate client-side so oversized files never reach the Server Action.
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const f of Array.from(fileList)) {
+      if (!f.type.startsWith("image/")) {
+        rejected.push(`${f.name} (format non supporté)`);
+      } else if (f.size > MAX_FILE_BYTES) {
+        rejected.push(`${f.name} (${(f.size / 1024 / 1024).toFixed(1)} Mo > 8 Mo)`);
+      } else {
+        accepted.push(f);
+      }
+    }
+
+    if (accepted.length === 0) {
+      setUploading(false);
+      setUploadMsg({
+        type: "err",
+        text: `Aucune image envoyée — ${rejected.join(", ")}.`,
+      });
+      return;
+    }
+
     setUploading(true);
     setUploadMsg(null);
+
     startTransition(async () => {
-      const res = await uploadImagesAction(fd);
-      setUploading(false);
-      if (res.urls.length > 0) {
-        onChange({ ...value, images: [...value.images, ...res.urls] });
+      const uploaded: string[] = [];
+      const errors: string[] = [...rejected];
+
+      // One request per file keeps each payload well under the body limit.
+      for (const file of accepted) {
+        const fd = new FormData();
+        fd.append("files", file);
+        try {
+          const res = await uploadImagesAction(fd);
+          if (res.urls.length > 0) uploaded.push(...res.urls);
+          if (res.error) errors.push(res.error);
+        } catch (err) {
+          // A thrown Server Action (e.g. 413) must not crash the client.
+          const msg = (err as Error)?.message ?? "erreur inconnue";
+          errors.push(
+            /body|413|limit/i.test(msg)
+              ? `${file.name}: image trop lourde pour l'envoi.`
+              : `${file.name}: ${msg}`
+          );
+        }
       }
-      if (!res.ok) setUploadMsg({ type: "err", text: res.error ?? "Échec du téléversement." });
-      else if (res.error) setUploadMsg({ type: "err", text: res.error });
-      else setUploadMsg({ type: "ok", text: `${res.urls.length} image(s) téléversée(s).` });
+
+      setUploading(false);
+      if (uploaded.length > 0) {
+        onChange({ ...value, images: [...value.images, ...uploaded] });
+      }
+      if (errors.length > 0) {
+        setUploadMsg({
+          type: uploaded.length > 0 ? "err" : "err",
+          text:
+            (uploaded.length > 0 ? `${uploaded.length} image(s) ajoutée(s). ` : "") +
+            errors.join(" · "),
+        });
+      } else {
+        setUploadMsg({ type: "ok", text: `${uploaded.length} image(s) téléversée(s).` });
+      }
     });
   }
 
@@ -245,106 +260,70 @@ export default function ProductForm({
 
   return (
     <div className="space-y-6">
-      {/* ---- Code analysis (local) ---- */}
-      <section className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <h3 className="text-sm font-semibold text-gray-900">Analyse du code produit</h3>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            value={value.productCode}
-            onChange={(e) => set("productCode", e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); analyzeCode(); } }}
-            className={`${inputCls} font-mono`}
-            placeholder="Code produit / style (ex: DN1772305)"
-          />
-          <button
-            type="button"
-            onClick={analyzeCode}
-            disabled={isPending}
-            className="shrink-0 inline-flex items-center justify-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 cursor-pointer"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            {isPending ? "Analyse..." : "Analyser le code"}
-          </button>
-        </div>
-        {lookupMsg && (
-          <p
-            className={`text-xs mt-2 ${
-              lookupMsg.type === "ok"
-                ? "text-green-600"
-                : lookupMsg.type === "info"
-                ? "text-gray-600"
-                : "text-amber-700"
-            }`}
-          >
-            {lookupMsg.text}
-          </p>
-        )}
-        <p className="text-[11px] text-gray-400 mt-1.5">
-          Normalise le format (ex: DN1772305 → DN1772-305) et déduit la marque et la catégorie
-          à partir du code. Traitement local, aucun service externe.
-        </p>
-      </section>
-
-      {/* ---- Category (drives the rest of the form) ---- */}
-      <section>
-        <label className="block text-sm font-semibold text-gray-900 mb-2">
-          Type de produit <span className="text-red-500">*</span>
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => set("category", c.value)}
-              className={`px-3 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                value.category === c.value
-                  ? "bg-gray-900 text-white border-gray-900"
-                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-900"
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        {!needsGender && (
-          <p className="text-[11px] text-gray-500 mt-1.5">
-            Les accessoires n&apos;ont ni genre ni taille.
-          </p>
-        )}
-      </section>
-
-      {/* ---- Gender (conditional) ---- */}
-      {needsGender && (
-        <section>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Genre <span className="text-red-500">*</span>
+      {/* ---- Category + Gender (drive the rest of the form) ---- */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">
+            Type de produit <span className="text-red-500">*</span>
           </label>
-          <select
-            value={value.gender}
-            onChange={(e) => {
-              // Changing gender invalidates previously picked chart sizes.
-              const g = e.target.value as ProductGender | "";
-              const keep = value.sizes.filter(
-                (s) => !getSizeOptions(value.category, (value.gender || null) as ProductGender | null).includes(s)
-              );
-              onChange({ ...value, gender: g, sizes: keep, stockBySize: {} });
-            }}
-            className={inputCls}
-          >
-            <option value="">Sélectionner un genre…</option>
-            {GENDERS.map((g) => (
-              <option key={g.value} value={g.value}>{g.label}</option>
+          <div className="grid grid-cols-3 gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => set("category", c.value)}
+                className={`px-2 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                  value.category === c.value
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-900"
+                }`}
+              >
+                {c.label}
+              </button>
             ))}
-          </select>
-        </section>
-      )}
+          </div>
+          {!needsGender && (
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              Les accessoires n&apos;ont ni genre ni taille (quantité en taille unique).
+            </p>
+          )}
+        </div>
+
+        {/* Gender — only for shoes and clothing */}
+        {needsGender && (
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Genre <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {GENDERS.map((g) => (
+                <button
+                  key={g.value}
+                  type="button"
+                  onClick={() => {
+                    // Changing gender invalidates previously picked chart sizes.
+                    const keep = value.sizes.filter(
+                      (s) =>
+                        !getSizeOptions(
+                          value.category,
+                          (value.gender || null) as ProductGender | null
+                        ).includes(s)
+                    );
+                    onChange({ ...value, gender: g.value, sizes: keep, stockBySize: {} });
+                  }}
+                  className={`px-2 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                    value.gender === g.value
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-gray-900"
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* ---- Core details ---- */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -468,6 +447,26 @@ export default function ProductForm({
           </div>
         )}
       </section>
+
+      {/* ---- Quantity for size-less categories (accessories) ---- */}
+      {!needsSizes && (
+        <section>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Quantité <span className="text-gray-400 font-normal">(taille unique)</span>
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={value.quantity}
+            onChange={(e) => set("quantity", e.target.value)}
+            placeholder="1"
+            className={`${inputCls} max-w-[10rem]`}
+          />
+          <p className="text-[11px] text-gray-400 mt-1">
+            Quantité par défaut : 1. À 0, le produit est masqué de la boutique.
+          </p>
+        </section>
+      )}
 
       {/* ---- Sizes (conditional on category + gender) ---- */}
       {needsSizes && (

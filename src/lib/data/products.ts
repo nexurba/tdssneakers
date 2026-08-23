@@ -73,22 +73,47 @@ async function loadWithVariants(rows: ProductRow[]): Promise<StoreProduct[]> {
 
 // ---- Public read API ---------------------------------------------------------
 
+/** Total units across every size. */
+export function totalStock(p: StoreProduct): number {
+  return Object.values(p.stockBySize ?? {}).reduce((a, b) => a + b, 0);
+}
+
+export function isPurchasable(p: StoreProduct): boolean {
+  return totalStock(p) > 0;
+}
+
 export async function getProducts(options?: {
+  /** Admin view: include inactive AND out-of-stock products. */
   includeInactive?: boolean;
 }): Promise<StoreProduct[]> {
-  if (!isDbConfigured) return getStaticProducts();
+  const includeAll = options?.includeInactive ?? false;
+
+  if (!isDbConfigured) {
+    const staticList = getStaticProducts();
+    return includeAll ? staticList : staticList.filter(isPurchasable);
+  }
 
   const rows = await db
     .select()
     .from(products)
-    .where(options?.includeInactive ? undefined : eq(products.isActive, true))
+    .where(includeAll ? undefined : eq(products.isActive, true))
     .orderBy(desc(products.createdAt));
-  return loadWithVariants(rows);
+
+  const list = await loadWithVariants(rows);
+  // Storefront hides anything with zero total quantity.
+  return includeAll ? list : list.filter(isPurchasable);
 }
 
-export async function getProductBySlug(slug: string): Promise<StoreProduct | null> {
+export async function getProductBySlug(
+  slug: string,
+  options?: { includeOutOfStock?: boolean }
+): Promise<StoreProduct | null> {
+  const includeAll = options?.includeOutOfStock ?? false;
+
   if (!isDbConfigured) {
-    return getStaticProducts().find((p) => p.slug === slug) ?? null;
+    const found = getStaticProducts().find((p) => p.slug === slug) ?? null;
+    if (!found) return null;
+    return includeAll || isPurchasable(found) ? found : null;
   }
   const rows = await db
     .select()
@@ -97,7 +122,9 @@ export async function getProductBySlug(slug: string): Promise<StoreProduct | nul
     .limit(1);
   if (rows.length === 0) return null;
   const [store] = await loadWithVariants(rows);
-  return store ?? null;
+  if (!store) return null;
+  // A sold-out product is not reachable from the storefront.
+  return includeAll || isPurchasable(store) ? store : null;
 }
 
 export async function searchProducts(query: string): Promise<StoreProduct[]> {
@@ -105,12 +132,14 @@ export async function searchProducts(query: string): Promise<StoreProduct[]> {
   if (!q) return [];
   if (!isDbConfigured) {
     const lower = q.toLowerCase();
-    return getStaticProducts().filter(
-      (p) =>
-        p.name.toLowerCase().includes(lower) ||
-        p.variant.toLowerCase().includes(lower) ||
-        p.color.toLowerCase().includes(lower)
-    );
+    return getStaticProducts()
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(lower) ||
+          p.variant.toLowerCase().includes(lower) ||
+          p.color.toLowerCase().includes(lower)
+      )
+      .filter(isPurchasable);
   }
   const rows = await db
     .select()
@@ -121,10 +150,13 @@ export async function searchProducts(query: string): Promise<StoreProduct[]> {
         or(
           ilike(products.name, `%${q}%`),
           ilike(products.variant, `%${q}%`),
-          ilike(products.color, `%${q}%`)
+          ilike(products.color, `%${q}%`),
+          ilike(products.brand, `%${q}%`),
+          ilike(products.productCode, `%${q}%`)
         )
       )
     )
     .orderBy(desc(products.createdAt));
-  return loadWithVariants(rows);
+  // Out-of-stock products are not surfaced in search either.
+  return (await loadWithVariants(rows)).filter(isPurchasable);
 }
