@@ -74,3 +74,23 @@ export async function isAuthenticated(): Promise<boolean> {
   const cookieStore = await cookies();
   return verifyToken(cookieStore.get(COOKIE_NAME)?.value);
 }
+
+export const UNAUTHORIZED_MESSAGE =
+  "Session administrateur absente ou expirée. Reconnectez-vous, puis réessayez.";
+
+/**
+ * Guard for Server Actions that mutate admin data.
+ *
+ * Gating the admin *pages* only stops the UI from rendering. Server Actions are
+ * ordinary public HTTP endpoints: their IDs ship inside publicly served JS
+ * chunks, so anyone holding an ID could invoke a mutation without ever passing
+ * the login screen. Every admin action therefore has to re-check the session
+ * itself.
+ *
+ * Returns an error result to hand straight back to the client, or null when the
+ * caller is allowed through.
+ */
+export async function assertAdmin(): Promise<{ ok: false; error: string } | null> {
+  if (await isAuthenticated()) return null;
+  return { ok: false, error: UNAUTHORIZED_MESSAGE };
+}

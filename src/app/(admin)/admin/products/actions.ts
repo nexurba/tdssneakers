@@ -9,6 +9,7 @@ import {
   type ProductInput,
 } from "@/lib/data/products-admin";
 import { isDbConfigured } from "@/db";
+import { assertAdmin } from "@/lib/auth/admin";
 import { uploadProductImage, isUploadAvailable } from "@/lib/storage/blob";
 import { requiresGender, requiresSizes, ONE_SIZE } from "@/lib/catalog/taxonomy";
 import {
@@ -183,6 +184,8 @@ function toMessage(err: unknown): string {
 export async function createProductAction(
   formData: FormData
 ): Promise<ActionResult> {
+  const denied = await assertAdmin();
+  if (denied) return denied;
   if (!isDbConfigured) {
     return { ok: false, error: "Base de données non configurée (DATABASE_URL manquant)." };
   }
@@ -199,6 +202,8 @@ export async function updateProductAction(
   id: number,
   formData: FormData
 ): Promise<ActionResult> {
+  const denied = await assertAdmin();
+  if (denied) return denied;
   if (!isDbConfigured) {
     return { ok: false, error: "Base de données non configurée (DATABASE_URL manquant)." };
   }
@@ -212,6 +217,8 @@ export async function updateProductAction(
 }
 
 export async function deleteProductAction(id: number): Promise<ActionResult> {
+  const denied = await assertAdmin();
+  if (denied) return denied;
   if (!isDbConfigured) {
     return { ok: false, error: "Base de données non configurée (DATABASE_URL manquant)." };
   }
@@ -229,6 +236,8 @@ export async function deleteProductAction(id: number): Promise<ActionResult> {
 export async function uploadImagesAction(
   formData: FormData
 ): Promise<{ ok: boolean; urls: string[]; error?: string }> {
+  const denied = await assertAdmin();
+  if (denied) return { ok: false, urls: [], error: denied.error };
   if (!isUploadAvailable()) {
     return {
       ok: false,

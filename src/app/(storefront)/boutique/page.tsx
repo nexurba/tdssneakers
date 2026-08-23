@@ -2,6 +2,13 @@ import { getProducts } from "@/lib/data/products";
 import BoutiqueClient from "@/components/BoutiqueClient";
 import type { Metadata } from "next";
 
+/** Valid ?cat= values mapped to the page heading shown for each. */
+const CATEGORY_HEADINGS: Record<string, string> = {
+  sneakers: "SNEAKERS",
+  vetements: "VÊTEMENTS",
+  accessoires: "ACCESSOIRES",
+};
+
 export const metadata: Metadata = {
   title: "Boutique",
   description:
@@ -31,14 +38,28 @@ export default async function BoutiquePage({
     );
   }
 
-  const validCats = ["sneakers", "vetements", "accessoires"];
-  const cat = params.cat && validCats.includes(params.cat) ? params.cat : null;
+  const cat =
+    params.cat && params.cat in CATEGORY_HEADINGS ? params.cat : null;
+
+  const heading = onlyNew
+    ? "NOUVEAUTÉS"
+    : query
+      ? `RÉSULTATS : « ${params.q} »`
+      : cat
+        ? CATEGORY_HEADINGS[cat]
+        : "BOUTIQUE";
 
   return (
     <BoutiqueClient
+      // BoutiqueClient seeds its filter state from initialCategory with
+      // useState, whose initialiser only runs on mount. Navigating between
+      // /boutique?cat=... URLs reuses the same instance, so without a changing
+      // key the old category (and any stale size/colour boxes in the sidebar)
+      // would stick and the new category would appear to do nothing.
+      key={`${cat ?? "all"}|${onlyNew ? "new" : ""}|${query}`}
       products={list}
       initialCategory={cat}
-      heading={onlyNew ? "NOUVEAUTÉS" : query ? `RÉSULTATS : « ${params.q} »` : "BOUTIQUE"}
+      heading={heading}
     />
   );
 }

@@ -12,6 +12,7 @@ import ProductForm, {
   emptyProductForm,
   type ProductFormState,
 } from "./ProductForm";
+import { safeCall, STALE_ACTION_MESSAGE } from "@/lib/actions/safe-call";
 import {
   CATEGORIES,
   GENDERS,
@@ -114,7 +115,11 @@ export default function ProductsManager({
 
   function notify(type: "success" | "error", text: string) {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
+    // A stale-build notice tells the user to reload and retry, so it must stay
+    // on screen; transient toasts still auto-dismiss.
+    if (text !== STALE_ACTION_MESSAGE) {
+      setTimeout(() => setMessage(null), 4000);
+    }
   }
 
   function openAdd() {
@@ -138,10 +143,14 @@ export default function ProductsManager({
   function submit() {
     const fd = formToFormData(form);
     startTransition(async () => {
-      const result =
+      // safeCall keeps a rejected action (stale build, dropped connection) from
+      // becoming an unhandled rejection. On failure the modal stays open, so
+      // the entry is not lost and can be resubmitted after a reload.
+      const result = await safeCall(() =>
         modalMode === "add"
-          ? await createProductAction(fd)
-          : await updateProductAction(editingId!, fd);
+          ? createProductAction(fd)
+          : updateProductAction(editingId!, fd)
+      );
       if (result.ok) {
         notify("success", modalMode === "add" ? "Produit ajouté" : "Produit modifié");
         close();
@@ -155,7 +164,7 @@ export default function ProductsManager({
   function remove(id: number) {
     if (!confirm("Supprimer ce produit ? Action irréversible.")) return;
     startTransition(async () => {
-      const result = await deleteProductAction(id);
+      const result = await safeCall(() => deleteProductAction(id));
       if (result.ok) {
         notify("success", "Produit supprimé");
         router.refresh();
