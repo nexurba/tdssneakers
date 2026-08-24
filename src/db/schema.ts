@@ -145,7 +145,25 @@ export const orders = pgTable(
     customerId: integer("customer_id").references(() => customers.id),
     email: text("email").notNull(),
     customerName: text("customer_name").notNull(),
+    phone: text("phone"),
+    // Kept for orders placed before the address was captured field-by-field,
+    // and used as the single-line rendering everywhere else.
     address: text("address"),
+    // Structured delivery address. Nullable because legacy rows only have the
+    // free-text `address` above.
+    addressLine1: text("address_line1"),
+    addressLine2: text("address_line2"),
+    city: text("city"),
+    province: text("province"),
+    postalCode: text("postal_code"),
+    country: text("country").default("CA"),
+    // Coordinates and provenance from the address lookup, so support can see
+    // whether an address was confirmed or typed in by hand.
+    latitude: numeric("latitude", { precision: 9, scale: 6 }),
+    longitude: numeric("longitude", { precision: 9, scale: 6 }),
+    addressValidated: boolean("address_validated").notNull().default(false),
+    /** Which service confirmed the address, e.g. "geo.ca". Null when unverified. */
+    addressSource: text("address_source"),
     status: orderStatusEnum("status").notNull().default("pending"),
     subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull(),
     shipping: numeric("shipping", { precision: 12, scale: 2 })
@@ -156,8 +174,12 @@ export const orders = pgTable(
       .notNull()
       .default("0"),
     total: numeric("total", { precision: 12, scale: 2 }).notNull(),
+    // Stripe columns retained so historical orders still read correctly.
     stripeSessionId: text("stripe_session_id"),
     stripePaymentIntent: text("stripe_payment_intent"),
+    // Square is the payment provider going forward.
+    squarePaymentId: text("square_payment_id"),
+    squareOrderId: text("square_order_id"),
     paid: boolean("paid").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -166,6 +188,9 @@ export const orders = pgTable(
     referenceIdx: uniqueIndex("orders_reference_idx").on(t.reference),
     customerIdx: index("orders_customer_idx").on(t.customerId),
     statusIdx: index("orders_status_idx").on(t.status),
+    // Makes a replayed payment notification impossible to double-record.
+    // Postgres allows repeated NULLs in a unique index, so unpaid rows are fine.
+    squarePaymentIdx: uniqueIndex("orders_square_payment_idx").on(t.squarePaymentId),
   })
 );
 

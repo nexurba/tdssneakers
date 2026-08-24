@@ -64,7 +64,23 @@ export async function POST(req: NextRequest) {
           reference,
           email: session.customer_email ?? meta.email ?? "inconnu@email.com",
           customerName: meta.customerName ?? "Client",
+          phone: meta.phone || null,
           address: meta.address,
+          // Only present when the checkout captured the address field by field.
+          structuredAddress: meta.addressLine1
+            ? {
+                line1: meta.addressLine1,
+                line2: meta.addressLine2 || null,
+                city: meta.city ?? "",
+                province: meta.province ?? "",
+                postalCode: meta.postalCode ?? "",
+                country: meta.country || "CA",
+                latitude: meta.latitude ? Number(meta.latitude) : null,
+                longitude: meta.longitude ? Number(meta.longitude) : null,
+                validated: meta.addressValidated === "true",
+                source: meta.addressSource || null,
+              }
+            : undefined,
           items: items.map((i) => ({
             productId: i.productId,
             name: i.name,

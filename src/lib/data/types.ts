@@ -33,7 +33,19 @@ export interface OrderData {
   customerId?: number | null;
   email: string;
   customerName: string;
+  phone?: string | null;
+  /** Single-line rendering of the delivery address. */
   address?: string | null;
+  /** Structured fields, absent on orders placed before they were captured. */
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  /** True when an address lookup service confirmed the address. */
+  addressValidated?: boolean;
+  addressSource?: string | null;
   status: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
   subtotal: number;
   shipping: number;

@@ -132,8 +132,73 @@ export default function OrdersManager({ initialOrders }: { initialOrders: OrderD
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Client</h3>
                 <p className="text-sm font-medium">{selected.customerName}</p>
-                <p className="text-sm text-gray-500">{selected.email}</p>
-                {selected.address && <p className="text-sm text-gray-500 mt-1">{selected.address}</p>}
+                <p className="text-sm text-gray-500">
+                  <a href={`mailto:${selected.email}`} className="hover:underline">
+                    {selected.email}
+                  </a>
+                </p>
+                {selected.phone && (
+                  <p className="text-sm text-gray-500">
+                    <a href={`tel:${selected.phone.replace(/\D/g, "")}`} className="hover:underline">
+                      {selected.phone}
+                    </a>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">
+                  Livraison
+                </h3>
+                {selected.addressLine1 ? (
+                  <address className="text-sm text-gray-700 not-italic leading-relaxed">
+                    {selected.addressLine1}
+                    {selected.addressLine2 && (
+                      <>
+                        <br />
+                        {selected.addressLine2}
+                      </>
+                    )}
+                    <br />
+                    {[selected.city, selected.province, selected.postalCode]
+                      .filter(Boolean)
+                      .join(", ")}
+                    {selected.country && selected.country !== "CA" && (
+                      <>
+                        <br />
+                        {selected.country}
+                      </>
+                    )}
+                  </address>
+                ) : selected.address ? (
+                  // Orders placed before the address was captured field by field.
+                  <p className="text-sm text-gray-700">{selected.address}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">Aucune adresse enregistrée</p>
+                )}
+
+                {/* Whether a lookup service confirmed the address, so support
+                    knows when to call before shipping. */}
+                {selected.addressLine1 && (
+                  <p className="mt-2">
+                    {selected.addressValidated ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Adresse vérifiée
+                        {selected.addressSource ? ` (${selected.addressSource})` : ""}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                        </svg>
+                        Adresse non vérifiée — à confirmer avant expédition
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Articles</h3>

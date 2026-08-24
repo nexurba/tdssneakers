@@ -10,6 +10,12 @@ import {
   logAndMask,
   logMisconfiguration,
 } from "@/lib/errors/customer-facing";
+import {
+  formatAddress,
+  formatPhone,
+  isValidPhone,
+  isValidPostalCode,
+} from "@/lib/geo/types";
 
 const cartItemSchema = z.object({
   productId: z.number(),
@@ -17,10 +23,27 @@ const cartItemSchema = z.object({
   quantity: z.number().min(1),
 });
 
+const addressSchema = z.object({
+  line1: z.string().min(1, "Adresse requise"),
+  line2: z.string().optional(),
+  city: z.string().min(1, "Ville requise"),
+  province: z.string().min(2, "Province requise"),
+  postalCode: z.string().refine(isValidPostalCode, "Code postal invalide"),
+  country: z.string().default("CA"),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  /** Whether the lookup service confirmed the address. Advisory only. */
+  validated: z.boolean().optional(),
+  source: z.string().optional(),
+});
+
+export type CheckoutAddress = z.infer<typeof addressSchema>;
+
 const checkoutSchema = z.object({
   email: z.string().email("Email invalide"),
   name: z.string().min(1, "Nom requis"),
-  address: z.string().min(1, "Adresse requise"),
+  phone: z.string().refine(isValidPhone, "Numéro de téléphone invalide"),
+  address: addressSchema,
   promoCode: z.string().optional(),
   items: z.array(cartItemSchema).min(1, "Panier vide"),
 });
@@ -75,7 +98,7 @@ export async function createCheckoutAction(
     return { ok: false, error: CUSTOMER_MESSAGES.paymentUnavailable };
   }
 
-  const { email, name, address, promoCode, items } = parsed.data;
+  const { email, name, phone, address, promoCode, items } = parsed.data;
 
   // Re-price server-side from the catalog to prevent tampering.
   const catalog = await getProducts();
@@ -162,7 +185,28 @@ export async function createCheckoutAction(
         : {}),
       metadata: {
         customerName: name,
-        address,
+        phone: formatPhone(phone),
+        // One-line rendering for emails and admin display.
+        address: formatAddress({
+          line1: address.line1,
+          line2: address.line2 ?? null,
+          city: address.city,
+          province: address.province,
+          postalCode: address.postalCode,
+          country: address.country,
+        }),
+        // Structured fields, so the order no longer has to guess the city by
+        // splitting free text on commas.
+        addressLine1: address.line1,
+        addressLine2: address.line2 ?? "",
+        city: address.city,
+        province: address.province,
+        postalCode: address.postalCode,
+        country: address.country,
+        latitude: address.latitude !== undefined ? String(address.latitude) : "",
+        longitude: address.longitude !== undefined ? String(address.longitude) : "",
+        addressValidated: address.validated ? "true" : "false",
+        addressSource: address.source ?? "",
         promoCode: appliedCode,
         subtotal: String(totals.subtotal),
         discount: String(totals.discount),

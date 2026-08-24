@@ -5,18 +5,33 @@ import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import { computeTotals } from "@/lib/commerce/settings";
 import { createCheckoutAction, applyPromoAction } from "./actions";
+import AddressFields, { emptyAddress, type AddressValue } from "./AddressFields";
+import { formatPhone, isValidPhone, isValidPostalCode } from "@/lib/geo/types";
+
+interface Contact {
+  email: string;
+  name: string;
+  phone: string;
+}
+
+type FieldErrors = Partial<Record<keyof Contact, string>> & {
+  address?: Partial<Record<keyof AddressValue, string>>;
+};
 
 export default function CheckoutClient({
   paymentAvailable,
   supportEmail,
 }: {
-  /** False when online payment cannot be taken right now. */
   paymentAvailable: boolean;
   supportEmail: string;
 }) {
   const { items, totalPrice } = useCart();
   const [isPending, startTransition] = useTransition();
-  const [form, setForm] = useState({ email: "", name: "", address: "" });
+
+  const [contact, setContact] = useState<Contact>({ email: "", name: "", phone: "" });
+  const [address, setAddress] = useState<AddressValue>(emptyAddress);
+  const [errors, setErrors] = useState<FieldErrors>({});
+
   const [promoCode, setPromoCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [promoMsg, setPromoMsg] = useState<string | null>(null);
@@ -26,6 +41,35 @@ export default function CheckoutClient({
     () => computeTotals(totalPrice, discount),
     [totalPrice, discount]
   );
+
+  /** Validates every field up front so nothing fails only on the server. */
+  function validate(): boolean {
+    const next: FieldErrors = {};
+    const addr: Partial<Record<keyof AddressValue, string>> = {};
+
+    if (!contact.email.trim()) next.email = "Courriel requis";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim())) {
+      next.email = "Courriel invalide";
+    }
+    if (!contact.name.trim()) next.name = "Nom requis";
+
+    if (!contact.phone.trim()) next.phone = "Téléphone requis";
+    else if (!isValidPhone(contact.phone)) {
+      next.phone = "Numéro à 10 chiffres, ex. (514) 555-0142";
+    }
+
+    if (!address.line1.trim()) addr.line1 = "Adresse requise";
+    if (!address.city.trim()) addr.city = "Ville requise";
+    if (!address.province) addr.province = "Province requise";
+    if (!address.postalCode.trim()) addr.postalCode = "Code postal requis";
+    else if (!isValidPostalCode(address.postalCode)) {
+      addr.postalCode = "Format attendu : H2X 1K4";
+    }
+
+    if (Object.keys(addr).length > 0) next.address = addr;
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }
 
   function applyPromo() {
     if (!promoCode.trim()) return;
@@ -43,11 +87,25 @@ export default function CheckoutClient({
 
   function pay() {
     setError(null);
+    if (!validate()) return;
+
     startTransition(async () => {
       const res = await createCheckoutAction({
-        email: form.email,
-        name: form.name,
-        address: form.address,
+        email: contact.email.trim(),
+        name: contact.name.trim(),
+        phone: contact.phone.trim(),
+        address: {
+          line1: address.line1.trim(),
+          line2: address.line2.trim() || undefined,
+          city: address.city.trim(),
+          province: address.province,
+          postalCode: address.postalCode.trim(),
+          country: address.country,
+          latitude: address.latitude ?? undefined,
+          longitude: address.longitude ?? undefined,
+          validated: address.validated,
+          source: address.source ?? undefined,
+        },
         promoCode: discount > 0 ? promoCode : undefined,
         items: items.map((i) => ({
           productId: i.productId,
@@ -78,7 +136,6 @@ export default function CheckoutClient({
     <div className="max-w-5xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-black text-gray-900 mb-8">Commande</h1>
 
-      {/* Told up front, so nobody fills the form only to be blocked at the end. */}
       {!paymentAvailable && (
         <div className="mb-8 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
           <p className="font-bold text-amber-900 text-sm">
@@ -96,51 +153,92 @@ export default function CheckoutClient({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {/* Form */}
-        <div className="space-y-4">
-          <h2 className="font-bold text-gray-900">Coordonnées &amp; livraison</h2>
-          <div>
-            <label htmlFor="co-email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              id="co-email"
-              type="email"
-              autoComplete="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="vous@email.com"
+        {/* Contact + delivery */}
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <h2 className="font-bold text-gray-900">Coordonnées</h2>
+
+            <div>
+              <label htmlFor="co-email" className="block text-sm font-medium text-gray-700 mb-1">
+                Courriel <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="co-email"
+                type="email"
+                autoComplete="email"
+                value={contact.email}
+                onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                placeholder="vous@email.com"
+                className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  errors.email ? "border-red-400" : "border-gray-300"
+                }`}
+              />
+              {errors.email ? (
+                <p className="text-xs text-red-600 mt-1">{errors.email}</p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Pour la confirmation et le suivi de commande.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="co-name" className="block text-sm font-medium text-gray-700 mb-1">
+                Nom complet <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="co-name"
+                type="text"
+                autoComplete="name"
+                value={contact.name}
+                onChange={(e) => setContact({ ...contact, name: e.target.value })}
+                placeholder="Jean Tremblay"
+                className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  errors.name ? "border-red-400" : "border-gray-300"
+                }`}
+              />
+              {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="co-phone" className="block text-sm font-medium text-gray-700 mb-1">
+                Téléphone <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="co-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={contact.phone}
+                onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                onBlur={() =>
+                  contact.phone &&
+                  isValidPhone(contact.phone) &&
+                  setContact({ ...contact, phone: formatPhone(contact.phone) })
+                }
+                placeholder="(514) 555-0142"
+                className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  errors.phone ? "border-red-400" : "border-gray-300"
+                }`}
+              />
+              {errors.phone ? (
+                <p className="text-xs text-red-600 mt-1">{errors.phone}</p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Le transporteur peut vous joindre à la livraison.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="font-bold text-gray-900">Adresse de livraison</h2>
+            <AddressFields
+              value={address}
+              onChange={setAddress}
+              errors={errors.address ?? {}}
             />
-          </div>
-          <div>
-            <label htmlFor="co-name" className="block text-sm font-medium text-gray-700 mb-1">
-              Nom complet
-            </label>
-            <input
-              id="co-name"
-              type="text"
-              autoComplete="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="Jean Tremblay"
-            />
-          </div>
-          <div>
-            <label htmlFor="co-address" className="block text-sm font-medium text-gray-700 mb-1">
-              Adresse de livraison
-            </label>
-            <textarea
-              id="co-address"
-              autoComplete="shipping street-address"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="123 Rue Sainte-Catherine, Montréal, QC, H2X 1K4"
-            />
-          </div>
+          </section>
 
           {error && (
             <div
@@ -153,7 +251,7 @@ export default function CheckoutClient({
         </div>
 
         {/* Summary */}
-        <div className="bg-gray-50 rounded-2xl p-6 h-fit">
+        <div className="bg-gray-50 rounded-2xl p-6 h-fit lg:sticky lg:top-24">
           <h2 className="font-bold text-gray-900 mb-4">Récapitulatif</h2>
           <div className="space-y-3 mb-4">
             {items.map((item) => (
@@ -171,7 +269,6 @@ export default function CheckoutClient({
             ))}
           </div>
 
-          {/* Promo */}
           <div className="flex gap-2 mb-4">
             <input
               type="text"
@@ -179,7 +276,7 @@ export default function CheckoutClient({
               onChange={(e) => setPromoCode(e.target.value)}
               placeholder="Code promo"
               aria-label="Code promo"
-              className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             />
             <button
               type="button"
@@ -216,12 +313,12 @@ export default function CheckoutClient({
             {!paymentAvailable
               ? "PAIEMENT INDISPONIBLE"
               : isPending
-                ? "Redirection..."
+                ? "Traitement..."
                 : "PAYER"}
           </button>
           <p className="text-[11px] text-gray-400 mt-2 text-center">
             {paymentAvailable
-              ? "Paiement sécurisé via Stripe"
+              ? "Paiement sécurisé"
               : "Aucun montant ne sera débité"}
           </p>
         </div>
