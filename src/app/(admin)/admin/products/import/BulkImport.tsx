@@ -11,6 +11,7 @@ import {
 } from "@/lib/catalog/product-import";
 import { CATEGORIES } from "@/lib/catalog/taxonomy";
 import { safeCall } from "@/lib/actions/safe-call";
+import { uploadImagesToBlob } from "@/lib/storage/client-upload";
 import {
   finishImportAction,
   importRowAction,
@@ -21,13 +22,29 @@ import {
 /** How many rows are imported at once. Keeps progress visible but not glacial. */
 const CONCURRENCY = 3;
 
-type RowState = "pending" | "running" | "created" | "updated" | "skipped" | "error";
+/**
+ * Ceiling for the spreadsheet, kept under Vercel's ~4.5 MB function request
+ * body cap so the failure is explained rather than surfacing as a raw 413.
+ */
+const SHEET_MAX_BYTES = 4 * 1024 * 1024;
+
+type RowState =
+  | "pending"
+  | "uploading"
+  | "running"
+  | "created"
+  | "updated"
+  | "skipped"
+  | "error";
 
 interface RowStatus {
   state: RowState;
   message?: string;
   warnings?: string[];
   imageCount?: number;
+  /** Images sent so far, while state is "uploading". */
+  uploaded?: number;
+  total?: number;
 }
 
 // ---- Small presentational helpers ------------------------------------------
@@ -44,6 +61,14 @@ function Spinner({ className = "w-4 h-4" }: { className?: string }) {
 function StatusBadge({ status }: { status: RowStatus | undefined }) {
   if (!status || status.state === "pending") {
     return <span className="text-xs text-gray-400">en attente</span>;
+  }
+  if (status.state === "uploading") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-blue-700">
+        <Spinner className="w-3.5 h-3.5" />
+        images {(status.uploaded ?? 0) + 1}/{status.total ?? 0}
+      </span>
+    );
   }
   if (status.state === "running") {
     return (
@@ -103,7 +128,14 @@ function isImageName(name: string): boolean {
 
 // ---- Main component ---------------------------------------------------------
 
-export default function BulkImport({ dbConfigured }: { dbConfigured: boolean }) {
+export default function BulkImport({
+  dbConfigured,
+  blobAvailable,
+}: {
+  dbConfigured: boolean;
+  /** True when images can be uploaded straight from the browser to Blob. */
+  blobAvailable: boolean;
+}) {
   const router = useRouter();
 
   const [parsing, setParsing] = useState(false);
@@ -152,6 +184,20 @@ export default function BulkImport({ dbConfigured }: { dbConfigured: boolean }) 
     setStatuses({});
     setFinished(false);
     setFileName(file.name);
+
+    // The spreadsheet does travel through the Server Action, and a hosted
+    // function rejects bodies over roughly 4.5 MB with a bare 413. Catching it
+    // here gives an actionable message instead.
+    if (file.size > SHEET_MAX_BYTES) {
+      setFatal(
+        `Ce fichier fait ${(file.size / 1024 / 1024).toFixed(1)} Mo, au-delà de la limite de 4 Mo. ` +
+          `Un fichier de produits dépasse rarement quelques centaines de Ko : ` +
+          `s'il est très lourd, il contient probablement des images intégrées — ` +
+          `retirez-les et déposez les photos dans l'étape 2.`
+      );
+      return;
+    }
+
     setParsing(true);
     try {
       const fd = new FormData();
@@ -189,14 +235,43 @@ export default function BulkImport({ dbConfigured }: { dbConfigured: boolean }) 
       for (;;) {
         const row = queue.shift();
         if (!row) return;
+        let uploadErrors: string[] = [];
 
         setStatuses((s) => ({ ...s, [row.rowNumber]: { state: "running" } }));
 
         const fd = new FormData();
         fd.append("row", JSON.stringify(row));
         fd.append("mode", duplicateMode);
-        for (const file of imageMatch.byRow.get(row.rowNumber) ?? []) {
-          fd.append("files", file);
+
+        const rowFiles = imageMatch.byRow.get(row.rowNumber) ?? [];
+        if (rowFiles.length > 0) {
+          if (blobAvailable) {
+            // Straight from the browser to Blob. Routing these bytes through the
+            // Server Action would exceed Vercel's 4.5 MB function body cap and
+            // fail with a 413 before any of our code ran.
+            setStatuses((s) => ({
+              ...s,
+              [row.rowNumber]: { state: "uploading", uploaded: 0, total: rowFiles.length },
+            }));
+            const { urls, errors: upErrors } = await uploadImagesToBlob(
+              rowFiles,
+              (index) =>
+                setStatuses((s) => ({
+                  ...s,
+                  [row.rowNumber]: {
+                    state: "uploading",
+                    uploaded: index,
+                    total: rowFiles.length,
+                  },
+                }))
+            );
+            for (const u of urls) fd.append("imageUrls", u.url);
+            uploadErrors = upErrors;
+            setStatuses((s) => ({ ...s, [row.rowNumber]: { state: "running" } }));
+          } else {
+            // Development fallback: no Blob token, so the action writes to disk.
+            for (const file of rowFiles) fd.append("files", file);
+          }
         }
 
         const res = (await safeCall(() => importRowAction(fd))) as Awaited<
@@ -208,7 +283,8 @@ export default function BulkImport({ dbConfigured }: { dbConfigured: boolean }) 
           [row.rowNumber]: res.ok
             ? {
                 state: res.outcome ?? "created",
-                warnings: res.warnings,
+                // Surface image failures alongside anything the server reported.
+                warnings: [...uploadErrors, ...(res.warnings ?? [])],
                 imageCount: res.imageCount,
               }
             : { state: "error", message: res.error ?? "Erreur inconnue" },

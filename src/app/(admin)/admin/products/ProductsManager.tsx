@@ -88,9 +88,12 @@ function formToFormData(form: ProductFormState): FormData {
 export default function ProductsManager({
   initialProducts,
   dbConfigured,
+  blobAvailable,
 }: {
   initialProducts: StoreProduct[];
   dbConfigured: boolean;
+  /** True when images can be uploaded browser-to-Blob. */
+  blobAvailable: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -369,7 +372,12 @@ export default function ProductsManager({
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
-              <ProductForm value={form} onChange={setForm} mode={modalMode} />
+              <ProductForm
+                value={form}
+                onChange={setForm}
+                mode={modalMode}
+                blobAvailable={blobAvailable}
+              />
             </div>
 
             <div className="shrink-0 flex gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">

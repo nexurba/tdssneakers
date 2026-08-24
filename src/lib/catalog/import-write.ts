@@ -43,10 +43,18 @@ export async function findProductIdByCode(code: string): Promise<number | null> 
 export async function importOneRow({
   row,
   files,
+  imageUrls,
   mode,
 }: {
   row: ImportRow;
-  files: File[];
+  /**
+   * Raw files, only used by the development fallback. In production images are
+   * uploaded from the browser and arrive as `imageUrls`, because Vercel caps a
+   * function request body at 4.5 MB.
+   */
+  files?: File[];
+  /** Already-hosted image URLs, in gallery order. */
+  imageUrls?: string[];
   mode: DuplicateMode;
 }): Promise<ImportOutcome> {
   const warnings = [...row.warnings];
@@ -70,8 +78,10 @@ export async function importOneRow({
     };
   }
 
-  const urls: string[] = [];
-  for (const file of files) {
+  // Browser-uploaded URLs are the normal path; raw files only appear in the
+  // development fallback where Blob is not configured.
+  const urls: string[] = [...(imageUrls ?? [])];
+  for (const file of files ?? []) {
     const result = await uploadProductImage(file);
     if (result.ok) urls.push(result.url);
     else warnings.push(result.error);

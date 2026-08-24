@@ -19,6 +19,7 @@ import {
   type SizeScale,
 } from "@/lib/catalog/size-conversion";
 import { uploadImagesAction } from "./actions";
+import { uploadImageToBlob } from "@/lib/storage/client-upload";
 
 export interface ProductFormState {
   productCode: string;
@@ -70,10 +71,17 @@ export default function ProductForm({
   value,
   onChange,
   mode,
+  blobAvailable,
 }: {
   value: ProductFormState;
   onChange: (next: ProductFormState) => void;
   mode: "add" | "edit";
+  /**
+   * True when images can go browser-to-Blob. Required for files over ~4.5 MB,
+   * since a hosted function rejects request bodies above that with a 413 before
+   * any application code runs.
+   */
+  blobAvailable: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -173,24 +181,42 @@ export default function ProductForm({
         const file = accepted[i];
         setProgress({ done: i, total: accepted.length, current: file.name });
 
-        const fd = new FormData();
-        fd.append("files", file);
-        try {
-          const res = await uploadImagesAction(fd);
-          if (res.urls.length > 0) {
-            uploaded.push(...res.urls);
+        if (blobAvailable) {
+          // Browser to Blob directly: the file never passes through a function,
+          // so the 4.5 MB request body cap does not apply.
+          const res = await uploadImageToBlob(file, (percent) =>
+            setProgress({
+              done: i,
+              total: accepted.length,
+              current: `${file.name} ${Math.round(percent)}%`,
+            })
+          );
+          if (res.ok) {
+            uploaded.push(res.url);
             // Show each image as soon as it is stored.
             onChange({ ...value, images: [...value.images, ...uploaded] });
+          } else {
+            errors.push(res.error);
           }
-          if (res.error) errors.push(res.error);
-        } catch (err) {
-          // A thrown Server Action (e.g. 413) must not crash the client.
-          const msg = (err as Error)?.message ?? "erreur inconnue";
-          errors.push(
-            /body|413|limit/i.test(msg)
-              ? `${file.name}: image trop lourde pour l'envoi.`
-              : `${file.name}: ${msg}`
-          );
+        } else {
+          // Development fallback: no Blob token, so the action writes to disk.
+          const fd = new FormData();
+          fd.append("files", file);
+          try {
+            const res = await uploadImagesAction(fd);
+            if (res.urls.length > 0) {
+              uploaded.push(...res.urls);
+              onChange({ ...value, images: [...value.images, ...uploaded] });
+            }
+            if (res.error) errors.push(res.error);
+          } catch (err) {
+            const msg = (err as Error)?.message ?? "erreur inconnue";
+            errors.push(
+              /body|413|limit|PAYLOAD/i.test(msg)
+                ? `${file.name}: trop lourde pour l'envoi via le serveur.`
+                : `${file.name}: ${msg}`
+            );
+          }
         }
         setProgress({ done: i + 1, total: accepted.length, current: file.name });
       }

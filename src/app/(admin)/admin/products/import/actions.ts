@@ -223,8 +223,15 @@ export async function importRowAction(
     return { ok: false, rowNumber: row.rowNumber, error: row.errors.join(" · ") };
   }
 
+  // Images normally arrive as URLs already uploaded from the browser; raw files
+  // only appear in the development fallback when Blob is unconfigured.
+  const imageUrls = formData
+    .getAll("imageUrls")
+    .filter((u): u is string => typeof u === "string" && u.length > 0);
+
   const result = await importOneRow({
     row,
+    imageUrls,
     files: formData.getAll("files").filter((f): f is File => f instanceof File),
     mode: formData.get("mode") === "update" ? "update" : "skip",
   });
