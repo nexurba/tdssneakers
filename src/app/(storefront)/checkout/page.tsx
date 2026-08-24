@@ -1,197 +1,21 @@
-"use client";
+import type { Metadata } from "next";
+import { isStripeConfigured } from "@/lib/stripe";
+import { ORDER_SUPPORT_EMAIL } from "@/lib/errors/customer-facing";
+import CheckoutClient from "./CheckoutClient";
 
-import { useState, useMemo, useTransition } from "react";
-import Link from "next/link";
-import { useCart } from "@/context/CartContext";
-import { computeTotals } from "@/lib/commerce/settings";
-import { createCheckoutAction, applyPromoAction } from "./actions";
+export const metadata: Metadata = {
+  title: "Commande",
+  // A checkout page has nothing to offer a search engine.
+  robots: { index: false, follow: false },
+};
 
 export default function CheckoutPage() {
-  const { items, totalPrice } = useCart();
-  const [isPending, startTransition] = useTransition();
-  const [form, setForm] = useState({ email: "", name: "", address: "" });
-  const [promoCode, setPromoCode] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [promoMsg, setPromoMsg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const totals = useMemo(
-    () => computeTotals(totalPrice, discount),
-    [totalPrice, discount]
-  );
-
-  function applyPromo() {
-    if (!promoCode.trim()) return;
-    startTransition(async () => {
-      const res = await applyPromoAction(promoCode, totalPrice);
-      if (res.ok && res.discount !== undefined) {
-        setDiscount(res.discount);
-        setPromoMsg(`Code appliqué : -${res.discount},00 $`);
-      } else {
-        setDiscount(0);
-        setPromoMsg(res.error ?? "Code invalide");
-      }
-    });
-  }
-
-  function pay() {
-    setError(null);
-    startTransition(async () => {
-      const res = await createCheckoutAction({
-        email: form.email,
-        name: form.name,
-        address: form.address,
-        promoCode: discount > 0 ? promoCode : undefined,
-        items: items.map((i) => ({
-          productId: i.productId,
-          size: i.size,
-          quantity: i.quantity,
-        })),
-      });
-      if (res.ok && res.url) {
-        window.location.href = res.url;
-      } else {
-        setError(res.error ?? "Erreur lors du paiement.");
-      }
-    });
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-2xl font-black text-gray-900 mb-3">Votre panier est vide</h1>
-        <Link href="/boutique" className="inline-block bg-black text-white px-6 py-3 rounded-lg text-sm font-bold hover:bg-gray-800">
-          Retour à la boutique
-        </Link>
-      </div>
-    );
-  }
-
+  // Resolved on the server so the page can say up front whether payment is
+  // possible, instead of letting the shopper fill everything in and fail.
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-black text-gray-900 mb-8">Commande</h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {/* Form */}
-        <div className="space-y-4">
-          <h2 className="font-bold text-gray-900">Coordonnées & livraison</h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="vous@email.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom complet</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="Jean Tremblay"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Adresse de livraison</label>
-            <textarea
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="123 Rue Sainte-Catherine, Montréal, QC, H2X 1K4"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Summary */}
-        <div className="bg-gray-50 rounded-2xl p-6 h-fit">
-          <h2 className="font-bold text-gray-900 mb-4">Récapitulatif</h2>
-          <div className="space-y-3 mb-4">
-            {items.map((item) => (
-              <div key={`${item.productId}-${item.size}`} className="flex gap-3">
-                <img src={item.image} alt={item.name} className="w-14 h-14 rounded-lg object-cover" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.name}</p>
-                  <p className="text-xs text-gray-500">Taille {item.size} · Qté {item.quantity}</p>
-                </div>
-                <p className="text-sm font-semibold">{item.price * item.quantity} $</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Promo */}
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={promoCode}
-              onChange={(e) => setPromoCode(e.target.value)}
-              placeholder="Code promo"
-              className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-            <button
-              type="button"
-              onClick={applyPromo}
-              disabled={isPending}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
-            >
-              Appliquer
-            </button>
-          </div>
-          {promoMsg && <p className={`text-xs mb-3 ${discount > 0 ? "text-green-600" : "text-red-500"}`}>{promoMsg}</p>}
-
-          <div className="space-y-2 border-t pt-4 text-sm">
-            <Row label="Sous-total" value={totals.subtotal} />
-            {totals.discount > 0 && <Row label="Réduction" value={-totals.discount} highlight />}
-            <Row label="Livraison" value={totals.shipping} note={totals.shipping === 0 ? "Gratuite" : undefined} />
-            <Row label="Taxes (TPS+TVQ)" value={totals.tax} />
-            <div className="flex justify-between items-center pt-2 border-t font-bold text-base">
-              <span>Total</span>
-              <span>{totals.total.toFixed(2)} $ CAD</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={pay}
-            disabled={isPending}
-            className="mt-6 w-full bg-black text-white py-4 rounded-lg font-bold text-sm hover:bg-gray-800 transition-colors disabled:opacity-50"
-          >
-            {isPending ? "Redirection..." : "PAYER"}
-          </button>
-          <p className="text-[11px] text-gray-400 mt-2 text-center">Paiement sécurisé via Stripe</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  note,
-  highlight,
-}: {
-  label: string;
-  value: number;
-  note?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-gray-600">{label}</span>
-      <span className={highlight ? "text-green-600 font-medium" : "text-gray-900"}>
-        {note ?? `${value.toFixed(2)} $`}
-      </span>
-    </div>
+    <CheckoutClient
+      paymentAvailable={isStripeConfigured}
+      supportEmail={ORDER_SUPPORT_EMAIL}
+    />
   );
 }

@@ -5,6 +5,11 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { getProducts } from "@/lib/data/products";
 import { validatePromo } from "@/lib/data/promotions";
 import { computeTotals } from "@/lib/commerce/settings";
+import {
+  CUSTOMER_MESSAGES,
+  logAndMask,
+  logMisconfiguration,
+} from "@/lib/errors/customer-facing";
 
 const cartItemSchema = z.object({
   productId: z.number(),
@@ -26,13 +31,35 @@ export interface CheckoutResult {
   error?: string;
 }
 
+const promoInputSchema = z.object({
+  code: z.string().min(1).max(64),
+  subtotal: z.number().finite().min(0),
+});
+
 export async function applyPromoAction(
-  code: string,
-  subtotal: number
+  code: unknown,
+  subtotal: unknown
 ): Promise<{ ok: boolean; discount?: number; error?: string }> {
-  const promo = await validatePromo(code, subtotal);
-  if (!promo) return { ok: false, error: "Code promo invalide ou non applicable." };
-  return { ok: true, discount: promo.discount };
+  // Arguments come from the browser, so they are validated rather than trusted:
+  // passing a non-string previously threw inside validatePromo and returned a
+  // 500 instead of a usable message.
+  const parsed = promoInputSchema.safeParse({ code, subtotal });
+  if (!parsed.success) {
+    return { ok: false, error: "Code promo invalide ou non applicable." };
+  }
+
+  try {
+    const promo = await validatePromo(parsed.data.code, parsed.data.subtotal);
+    if (!promo) {
+      return { ok: false, error: "Code promo invalide ou non applicable." };
+    }
+    return { ok: true, discount: promo.discount };
+  } catch (err) {
+    return {
+      ok: false,
+      error: logAndMask("promo", err, "Code promo invalide ou non applicable."),
+    };
+  }
 }
 
 export async function createCheckoutAction(
@@ -43,11 +70,9 @@ export async function createCheckoutAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
   if (!isStripeConfigured) {
-    return {
-      ok: false,
-      error:
-        "Paiement non configuré. Renseignez STRIPE_SECRET_KEY dans .env.local pour activer le checkout.",
-    };
+    // The customer must never be told which key is missing or where it lives.
+    logMisconfiguration("Clé Stripe absente : aucun paiement possible");
+    return { ok: false, error: CUSTOMER_MESSAGES.paymentUnavailable };
   }
 
   const { email, name, address, promoCode, items } = parsed.data;
@@ -68,7 +93,15 @@ export async function createCheckoutAction(
   for (const item of items) {
     const product = catalogById.get(item.productId);
     if (!product) {
-      return { ok: false, error: `Produit indisponible (id ${item.productId}).` };
+      // Internal product IDs stay out of the response.
+      return {
+        ok: false,
+        error: logAndMask(
+          "checkout",
+          `cart references unpurchasable product id ${item.productId}`,
+          CUSTOMER_MESSAGES.itemUnavailable
+        ),
+      };
     }
     lineItems.push({
       productId: product.id,
@@ -153,6 +186,10 @@ export async function createCheckoutAction(
 
     return { ok: true, url: session.url ?? undefined };
   } catch (err) {
-    return { ok: false, error: (err as Error).message };
+    // Stripe messages can name parameters and limits; keep them in the log.
+    return {
+      ok: false,
+      error: logAndMask("checkout:session", err, CUSTOMER_MESSAGES.paymentFailed),
+    };
   }
 }
