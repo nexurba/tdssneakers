@@ -1,4 +1,5 @@
 import "server-only";
+import { Readable } from "node:stream";
 import ExcelJS from "exceljs";
 import {
   COLUMNS,
@@ -66,8 +67,9 @@ export async function readSheetRecords(
     const wb = new ExcelJS.Workbook();
     // Both readers take a stream. Going through Readable also sidesteps the
     // Buffer type variance between @types/node and exceljs' load(buffer).
-    const { Readable } = await import("stream");
-
+    // Imported statically at the top: `await import("stream")` resolves to a
+    // namespace whose named exports are undefined once webpack bundles this
+    // for the server, which made Readable.from blow up at runtime.
     if (name.endsWith(".csv")) {
       worksheet = await wb.csv.read(Readable.from(buffer));
     } else {
